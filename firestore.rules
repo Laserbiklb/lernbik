@@ -10,6 +10,11 @@ service cloud.firestore {
     match /users/{key} {
       allow get, create, update: if signedIn() && key.size() == 16;
     }
+    // Name → account. The same name always opens the same account; names are never reassigned.
+    match /nicks/{n} {
+      allow get: if signedIn();
+      allow create: if signedIn() && request.resource.data.key is string && request.resource.data.key.size() == 16;
+    }
     // Wortkreis progress (written by the Wortkreis page).
     match /wk/{key} {
       allow get, create, update: if signedIn() && key.size() == 16 && small();

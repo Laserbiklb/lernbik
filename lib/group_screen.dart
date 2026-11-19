@@ -6,7 +6,7 @@ import 'i18n.dart';
 import 'store.dart';
 import 'ui.dart';
 
-String groupLink(AppState s) => '$siteUrl/?g=${s.gid}';
+String groupLink(AppState s) => '$siteUrl/';
 
 Future<void> shareApp(BuildContext context, AppState s) async {
   final text = '${tr(s.lang, 'shareText')} ${groupLink(s)}';

@@ -113,20 +113,6 @@ class _MeScreenState extends State<MeScreen> {
         ),
       if (push == 'denied') Padding(padding: const EdgeInsets.all(16), child: Text(t('pushOff'), style: TextStyle(color: cs.error))),
       if (push == 'unsupported' && kIsWeb) Padding(padding: const EdgeInsets.all(16), child: Text(t('pushIos'), style: TextStyle(color: cs.onSurfaceVariant))),
-      head('backup'),
-      ListTile(
-        title: SelectableText(prettyCode(s.key), style: const TextStyle(fontFamily: 'monospace', fontWeight: FontWeight.w700, fontSize: 17)),
-        subtitle: Text(t('backupInfo')),
-        trailing: IconButton(
-          icon: const Icon(Icons.copy),
-          tooltip: t('copy'),
-          onPressed: () async {
-            await Clipboard.setData(ClipboardData(text: prettyCode(s.key)));
-            if (mounted) toast(context, t('copied'));
-          },
-        ),
-      ),
-      ListTile(leading: const Icon(Icons.key_outlined), title: Text(t('useCode')), onTap: _useCode),
       const Divider(height: 32),
       ListTile(leading: const Icon(Icons.flag_outlined), title: Text(t('report')), onTap: () => reportDialog(context, s, 'app')),
       ListTile(
@@ -136,9 +122,9 @@ class _MeScreenState extends State<MeScreen> {
       ),
       ListTile(
         leading: Icon(Icons.logout, color: cs.error),
-        title: Text(t('leave'), style: TextStyle(color: cs.error)),
+        title: Text(t('logout'), style: TextStyle(color: cs.error)),
         onTap: () async {
-          if (await confirm(context, s.lang, t('leaveAsk'), danger: true)) s.leaveGroup();
+          if (await confirm(context, s.lang, t('logoutAsk'), danger: true)) s.logout();
         },
       ),
       Padding(
@@ -161,7 +147,10 @@ class _MeScreenState extends State<MeScreen> {
         ],
       ),
     );
-    if (ok == true && c.text.trim().isNotEmpty) s.setNick(c.text);
+    if (ok == true && c.text.trim().isNotEmpty) {
+      final r = await s.setNick(c.text);
+      if (!r && mounted) toast(context, t('nickTaken'));
+    }
   }
 
   Future<void> _pickTime(String? old) async {
@@ -178,28 +167,6 @@ class _MeScreenState extends State<MeScreen> {
     final l = List.of(s.remind)..remove(old);
     if (!l.contains(v)) l.add(v);
     s.setRemind(true, l);
-  }
-
-  Future<void> _useCode() async {
-    final c = TextEditingController();
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(t('useCode')),
-        content: Column(mainAxisSize: MainAxisSize.min, children: [
-          Text(t('useCodeAsk')),
-          const SizedBox(height: 12),
-          TextField(controller: c, decoration: InputDecoration(hintText: t('codeHint'))),
-        ]),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(t('cancel'))),
-          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: Text(t('ok'))),
-        ],
-      ),
-    );
-    if (ok != true) return;
-    final r = await s.restore(c.text);
-    if (!r && mounted) toast(context, t('badCode'));
   }
 }
 

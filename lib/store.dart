@@ -8,6 +8,13 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'firebase_options.dart';
 
+/// The course group. Everyone who opens Lernbik lands here.
+const courseGid = 'vhs-lueneburg';
+const courseName = 'VHS Lüneburg';
+
+/// "  Anna  Maria " → "anna maria". Same name → same account.
+String nickId(String n) => n.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ').replaceAll('/', '_');
+
 const _alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 String randomId(int n) {
   final r = Random.secure();
@@ -115,6 +122,7 @@ class AppState extends ChangeNotifier {
       gid = prefs.getString('gid') ?? '';
       mid = prefs.getString('mid') ?? '';
       _listenUser();
+      if (gid != courseGid) joinGroup(courseGid);
     }
     ready = true;
     notifyListeners();
@@ -134,51 +142,63 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> createUser(String nickName) async {
-    key = randomId(16);
-    mid = randomId(10);
-    nick = nickName.trim();
+  /// Log in by name: the same name always opens the same account.
+  Future<void> login(String nickName) async {
+    final n = nickName.trim();
+    final ref = db.collection('nicks').doc(nickId(n));
+    final snap = await ref.get();
+    _cancel();
+    if (snap.exists) {
+      key = (snap.data()!['key'] ?? '') as String;
+      final u = await userDoc.get();
+      final d = u.data() ?? {};
+      nick = (d['nick'] ?? n) as String;
+      mid = (d['mid'] ?? randomId(10)) as String;
+    } else {
+      key = randomId(16);
+      mid = randomId(10);
+      nick = n;
+      await userDoc.set({
+        'nick': nick,
+        'mid': mid,
+        'lang': lang,
+        'remind': remind,
+        'remindOn': true,
+        'tz': DateTime.now().timeZoneOffset.inMinutes,
+        'created': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+      await ref.set({'key': key, 'nick': nick});
+    }
     await prefs.setString('key', key);
     await prefs.setString('nick', nick);
     await prefs.setString('mid', mid);
-    userDoc.set({
-      'nick': nick,
-      'mid': mid,
-      'lang': lang,
-      'remind': remind,
-      'remindOn': true,
-      'tz': DateTime.now().timeZoneOffset.inMinutes,
-      'created': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
     _listenUser();
+    await joinGroup(courseGid);
+  }
+
+  /// Log out on this phone (the account stays and opens again with the same name).
+  Future<void> logout() async {
+    _cancel();
+    key = '';
+    nick = '';
+    gid = '';
+    for (final k in ['key', 'nick', 'mid', 'gid']) {
+      await prefs.remove(k);
+    }
     notifyListeners();
   }
 
-  Future<void> setNick(String n) async {
-    nick = n.trim();
+  /// Returns false if another account already uses this name.
+  Future<bool> setNick(String n) async {
+    n = n.trim();
+    final ref = db.collection('nicks').doc(nickId(n));
+    final snap = await ref.get();
+    if (snap.exists && snap.data()!['key'] != key) return false;
+    if (!snap.exists) await ref.set({'key': key, 'nick': n});
+    nick = n;
     await prefs.setString('nick', nick);
     userDoc.set({'nick': nick}, SetOptions(merge: true));
     if (gid.isNotEmpty) _memberDoc().set({'nick': nick}, SetOptions(merge: true));
-    notifyListeners();
-  }
-
-  /// Restore from a recovery code. Returns false if no such user.
-  Future<bool> restore(String code) async {
-    final k = parseCode(code);
-    if (k == null) return false;
-    final s = await db.collection('users').doc(k).get();
-    if (!s.exists) return false;
-    _cancel();
-    key = k;
-    final d = s.data()!;
-    nick = (d['nick'] ?? '') as String;
-    mid = (d['mid'] ?? randomId(10)) as String;
-    gid = (d['gid'] ?? '') as String;
-    await prefs.setString('key', key);
-    await prefs.setString('nick', nick);
-    await prefs.setString('mid', mid);
-    await prefs.setString('gid', gid);
-    _listenUser();
     notifyListeners();
     return true;
   }
@@ -189,6 +209,14 @@ class AppState extends ChangeNotifier {
   }
 
   Future<void> joinGroup(String id) async {
+    if (id == courseGid && await groupExists(id) == null) {
+      await db.collection('groups').doc(id).set({
+        'name': courseName,
+        'created': FieldValue.serverTimestamp(),
+        'examDate': '',
+        'examName': '',
+      });
+    }
     gid = id;
     pendingGroup = null;
     await prefs.setString('gid', gid);
@@ -226,7 +254,7 @@ class AppState extends ChangeNotifier {
     _userSub = userDoc.snapshots().listen((s) {
       final d = s.data() ?? {};
       nick = (d['nick'] ?? nick) as String;
-      final g = (d['gid'] ?? gid) as String;
+      final g = courseGid;
       if (d['mid'] is String && (d['mid'] as String).isNotEmpty) mid = d['mid'] as String;
       done = Map<String, bool>.from((d['done'] ?? {}) as Map);
       remindOn = d['remindOn'] != false;

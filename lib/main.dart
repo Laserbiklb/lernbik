@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:app_links/app_links.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -24,11 +23,6 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(options: firebaseOptions);
   if (useEmulator) FirebaseFirestore.instance.useFirestoreEmulator('localhost', 8080);
-  // A group link opened in the browser: lernbik.web.app/?g=XXXX
-  if (kIsWeb) {
-    final g = parseGroup(Uri.base.toString());
-    if (g != null) state.pendingGroup = g;
-  }
   runApp(const LernbikApp());
   try {
     await state.init();
@@ -36,28 +30,11 @@ Future<void> main() async {
     state.ready = true;
     state.notify();
   }
-  if (!kIsWeb) _listenLinks();
   FirebaseMessaging.onMessage.listen((m) {
     final n = m.notification;
     if (n == null) return;
     messengerKey.currentState?.showSnackBar(SnackBar(content: Text([n.title, n.body].whereType<String>().join('\n'))));
   });
-}
-
-/// lernbik://join?g=XXXX opened from the web page or WhatsApp.
-void _listenLinks() {
-  final links = AppLinks();
-  void handle(Uri u) {
-    final g = parseGroup(u.toString());
-    if (g == null) return;
-    state.pendingGroup = g;
-    state.notify();
-  }
-
-  links.getInitialLink().then((u) {
-    if (u != null) handle(u);
-  });
-  links.uriLinkStream.listen(handle);
 }
 
 class LernbikApp extends StatelessWidget {
@@ -90,7 +67,6 @@ class Shell extends StatefulWidget {
 class _ShellState extends State<Shell> {
   int tab = 0;
   bool update = false;
-  bool askingSwitch = false;
   AppState get s => widget.s;
   String t(String k) => tr(s.lang, k);
 
@@ -105,7 +81,6 @@ class _ShellState extends State<Shell> {
 
   @override
   Widget build(BuildContext context) {
-    _maybeSwitchGroup();
     final cs = Theme.of(context).colorScheme;
     final androidWeb = kIsWeb && defaultTargetPlatform == TargetPlatform.android;
     final pages = [HwScreen(s: s), LearnScreen(s: s), GroupScreen(s: s), MeScreen(s: s)];
@@ -140,7 +115,7 @@ class _ShellState extends State<Shell> {
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
               child: Wrap(spacing: 8, crossAxisAlignment: WrapCrossAlignment.center, children: [
                 TextButton.icon(onPressed: () => openUrl(apkUrl), icon: const Icon(Icons.android), label: Text(t('android'))),
-                TextButton(onPressed: () => openUrl('lernbik://join?g=${s.gid}'), child: Text(t('openApp'))),
+                TextButton(onPressed: () => openUrl('lernbik://join'), child: Text(t('openApp'))),
               ]),
             ),
           ),
@@ -157,25 +132,5 @@ class _ShellState extends State<Shell> {
         ],
       ),
     );
-  }
-
-  /// A link to another group was opened while already in a group.
-  void _maybeSwitchGroup() {
-    final g = s.pendingGroup;
-    if (g == null || askingSwitch) return;
-    if (g == s.gid) {
-      s.pendingGroup = null;
-      return;
-    }
-    askingSwitch = true;
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      final name = await s.groupExists(g);
-      if (!mounted) return;
-      if (name != null && await confirm(context, s.lang, '${t('join')}: $name?')) {
-        await s.joinGroup(g);
-      }
-      s.pendingGroup = null;
-      askingSwitch = false;
-    });
   }
 }
