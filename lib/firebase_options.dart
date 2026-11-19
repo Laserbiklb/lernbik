@@ -27,4 +27,4 @@ const siteUrl = String.fromEnvironment('SITE', defaultValue: 'https://lernbik.we
 const useEmulator = bool.fromEnvironment('EMU');
 const apkUrl = 'https://github.com/Laserbiklb/lernbik/releases/latest/download/lernbik.apk';
 // Web push key (Firebase console → Cloud Messaging → Web Push certificates).
-const vapidKey = '';
+const vapidKey = 'BNWaQtaBmT1sszipooawTaFSLtC4WDGfW5o75Ya3E3QM9oPrYzVGvYueEnEzH01FVbST4I0F1GRuEX21FfvEs0U';
