@@ -543,7 +543,9 @@ class _DictScreenState extends State<DictScreen> {
           _ => ws,
         };
         final qq = fold(q);
-        if (qq.isNotEmpty) ws = ws.where((w) => fold(w.k).contains(qq) || w.r.toLowerCase().contains(q.trim().toLowerCase()));
+        final ql = q.trim().toLowerCase();
+        // German, Russian and English always match, whatever the app language.
+        if (qq.isNotEmpty) ws = ws.where((w) => fold(w.k).contains(qq) || w.ru.toLowerCase().contains(ql) || (w.en ?? '').toLowerCase().contains(ql));
         final list = ws.take(200).toList();
         final ownChapters = {for (final w in p.own) w.c}.toList();
         Widget chip(String v, String label, [Color c = L.der]) =>
@@ -557,7 +559,7 @@ class _DictScreenState extends State<DictScreen> {
               onChanged: (v) => setState(() => q = v),
               decoration: InputDecoration(
                 prefixIcon: const Icon(Icons.search, color: L.muted),
-                hintText: l('Wort suchen (de / ru) …', 'Найти слово (de / ru) …', 'Search a word (de / ru) …'),
+                hintText: l('Wort suchen (de / ru / en) …', 'Найти слово (de / ru / en) …', 'Search a word (de / ru / en) …'),
               ),
             ),
             Wrap(
