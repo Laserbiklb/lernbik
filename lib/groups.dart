@@ -3,6 +3,7 @@ import 'package:material_ui/material_ui.dart';
 import 'i18n.dart';
 import 'store.dart';
 import 'theme.dart';
+import 'ui.dart' show toast;
 
 /// List of existing groups to join, plus "new group". Used on the first start and in Ich.
 class GroupPicker extends StatefulWidget {
@@ -30,18 +31,36 @@ class _GroupPickerState extends State<GroupPicker> {
     super.dispose();
   }
 
-  Future<void> _run(Future<void> Function() f) async {
+  /// The group being joined (shows a spinner on its row).
+  String? joining;
+
+  Future<void> _run(Future<void> Function() f, {String? id}) async {
     setState(() {
       busy = true;
+      joining = id;
       err = null;
     });
     try {
-      await f();
+      await f().timeout(const Duration(seconds: 20));
       widget.onDone?.call();
+    } on StateError {
+      // The group is gone: say so and reload the list.
+      err = l('Diese Gruppe gibt es nicht mehr.', 'Этой группы больше нет.', 'This group no longer exists.');
+      groups = s.listGroups();
     } catch (_) {
-      err = tr(s.lang, 'offline');
+      err = l(
+        'Keine Verbindung. Prüfe das Internet oder öffne lernbik.web.app in Safari / Chrome statt in WhatsApp.',
+        'Нет связи. Проверьте интернет или откройте lernbik.web.app в Safari / Chrome, а не внутри WhatsApp.',
+        'No connection. Check the internet or open lernbik.web.app in Safari / Chrome instead of WhatsApp.',
+      );
     }
-    if (mounted) setState(() => busy = false);
+    if (!mounted) return;
+    setState(() {
+      busy = false;
+      joining = null;
+    });
+    // Errors also pop up at the bottom of the screen, where they can't be missed.
+    if (err != null) toast(context, err!);
   }
 
   String _count(int n) {
@@ -86,7 +105,7 @@ class _GroupPickerState extends State<GroupPicker> {
               child: Rows([
                 for (final g in list)
                   InkWell(
-                    onTap: busy || g.id == s.gid ? null : () => _run(() => s.joinGroup(g.id)),
+                    onTap: busy || g.id == s.gid ? null : () => _run(() => s.joinGroup(g.id), id: g.id),
                     child: Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                       child: Row(
@@ -100,7 +119,9 @@ class _GroupPickerState extends State<GroupPicker> {
                               ],
                             ),
                           ),
-                          if (g.id == s.gid)
+                          if (joining == g.id)
+                            const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2.5))
+                          else if (g.id == s.gid)
                             Pill(l('deine', 'ваша', 'yours'), color: L.das)
                           else if (g.id == s.pendingGroup)
                             Pill(l('Einladung', 'приглашение', 'invite'), color: L.sign),
