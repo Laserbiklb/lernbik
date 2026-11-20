@@ -16,10 +16,16 @@ List<Gen> gensFor(Rule r) => [...?ruleGens[r.id], for (final t in r.trainers) ..
 
 bool hasTasks(Rule r) => gensFor(r).isNotEmpty || (LearnData.i.quiz[r.id]?.isNotEmpty ?? false);
 
+
 /// A run for a rule: mostly freshly generated tasks, mixed with the handwritten ones.
 List<Task> tasksForRule(Rule r, String lang, {int n = 6}) {
   final gens = gensFor(r);
-  final qz = [for (final s in LearnData.i.quiz[r.id] ?? const <String>[]) Task.qz(s)]..shuffle(_rnd);
+  // Handwritten tasks explain in Russian; in German/English only the generated ones are used.
+  final cyr = RegExp('[а-яА-ЯёЁ]');
+  final qz = [
+    for (final s in LearnData.i.quiz[r.id] ?? const <String>[])
+      if (lang == 'ru' || !cyr.hasMatch(s)) Task.qz(s)
+  ]..shuffle(_rnd);
   final out = <Task>[];
   final seen = <String>{};
   void addT(Task t) {

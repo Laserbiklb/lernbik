@@ -65,6 +65,7 @@ void main() {
       if (!hasTasks(rule)) continue;
       withTasks++;
       for (var i = 0; i < 20; i++) {
+        expect(tasksForRule(rule, 'de'), isNotEmpty, reason: 'de ${rule.id}');
         for (final t in tasksForRule(rule, 'ru')) {
           check(t, 'rule ${rule.id}');
         }

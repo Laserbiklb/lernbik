@@ -35,7 +35,7 @@ jobs:
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "app=${{ inputs.apk }}" >> "$GITHUB_OUTPUT"; exit 0
           fi
-          if git diff --name-only HEAD~1 HEAD 2>/dev/null | grep -qE '^(lib/|android/|pubspec\.)'; then
+          if git diff --name-only HEAD~1 HEAD 2>/dev/null | grep -qE '^(lib/|android/|assets/|pubspec\.)'; then
             echo "app=true" >> "$GITHUB_OUTPUT"
           elif ! gh release view --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             echo "app=true" >> "$GITHUB_OUTPUT"
@@ -68,6 +68,8 @@ jobs:
           if [ -z "$KEYSTORE" ]; then echo "::error::Secret ANDROID_KEYSTORE is missing"; exit 1; fi
           echo "$KEYSTORE" | base64 -d > android/app/lernbik.jks
           printf 'storeFile=lernbik.jks\nstorePassword=%s\nkeyAlias=lernbik\nkeyPassword=%s\n' "$KEYPASS" "$KEYPASS" > android/key.properties
+      - name: Fonts
+        run: sh tools/fonts.sh
       - name: Build APK
         run: flutter build apk --release --target-platform android-arm,android-arm64 --build-number=${{ github.run_number }} --build-name=1.0.${{ github.run_number }}
       - name: Release
@@ -90,6 +92,8 @@ jobs:
           cache: true
       - name: Wortkreis page
         run: python3 tools/wrap_wortkreis.py
+      - name: Fonts
+        run: sh tools/fonts.sh
       - name: Build web
         run: flutter build web --release
       - name: version.json (latest APK build)
