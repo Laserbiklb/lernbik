@@ -1,0 +1,16 @@
+# One-time, read-only: list groups and members. Delete afterwards.
+name: List groups (once)
+on: workflow_dispatch
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: npm install --prefix tools --no-audit --no-fund
+      - run: node tools/list_once.mjs
+        env:
+          FIREBASE_SA: ${{ secrets.FIREBASE_SA }}
