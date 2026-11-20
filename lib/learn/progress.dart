@@ -225,7 +225,18 @@ class Progress extends ChangeNotifier {
       return 2 + g.b;
     }
 
-    List<Word> byBook(Iterable<Word> a) => a.toList()..sort((x, y) => x.o.compareTo(y.o));
+    // New words: chapter by chapter as in the book, inside a chapter the easy ones first.
+    final chapterStart = <String, int>{};
+    for (final w in pool) {
+      chapterStart[w.c] = min(chapterStart[w.c] ?? w.o, w.o);
+    }
+    List<Word> byBook(Iterable<Word> a) => a.toList()
+      ..sort((x, y) {
+        final c = chapterStart[x.c]!.compareTo(chapterStart[y.c]!);
+        if (c != 0) return c;
+        final e = x.ease.compareTo(y.ease);
+        return e != 0 ? e : x.o.compareTo(y.o);
+      });
     p.sort((x, y) => rank(x).compareTo(rank(y)));
     if (mode == 'rev') {
       final seen = p.where((w) => prog[w.k] != null).toList()..sort((x, y) => rank(x).compareTo(rank(y)));

@@ -1,3 +1,4 @@
+import 'dart:math';
 import 'dart:convert';
 
 import 'package:flutter/services.dart' show rootBundle;
@@ -23,6 +24,11 @@ class Word {
   /// "A2 · 6" → "A2"
   String get level => RegExp(r'^(A[12]) · ').firstMatch(c)?.group(1) ?? '';
   int get chapterNo => int.tryParse(c.split(' · ').last) ?? 0;
+
+  /// How hard a new word is, for the order within a chapter: words that look like their English
+  /// translation come first (das Hotel, die Pizza), then shorter before longer.
+  late final int ease = (looksEnglish(d, en) ? 0 : 1000) + _letters(d);
+
 }
 
 class Chapter {
@@ -128,4 +134,43 @@ class LearnData {
     }
     return null;
   }
+}
+
+
+String _fold(String s) => s
+    .toLowerCase()
+    .replaceAll('ä', 'a')
+    .replaceAll('ö', 'o')
+    .replaceAll('ü', 'u')
+    .replaceAll('ß', 'ss')
+    .replaceAll(RegExp('[^a-z]'), '');
+
+int _letters(String s) => _fold(s).length;
+
+int _lev(String a, String b) {
+  var prev = List<int>.generate(b.length + 1, (i) => i);
+  for (var i = 1; i <= a.length; i++) {
+    final cur = List<int>.filled(b.length + 1, 0)..[0] = i;
+    for (var j = 1; j <= b.length; j++) {
+      cur[j] = [prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] == b[j - 1] ? 0 : 1)].reduce(min);
+    }
+    prev = cur;
+  }
+  return prev[b.length];
+}
+
+/// Whether a German word looks like (one of) its English translations: Hotel/hotel, Banane/banana, Tomate/tomato.
+bool looksEnglish(String de, String? en) {
+  if (en == null || en.isEmpty) return false;
+  final g = _fold(de.split(' / ').first);
+  if (g.length < 3) return false;
+  for (var e in en.split(RegExp(r'[,/;]'))) {
+    e = e.replaceAll(RegExp(r'\(.*?\)'), '').trim().replaceFirst(RegExp(r'^(to|the|a|an) '), '');
+    final f = _fold(e);
+    if (f.length < 3) continue;
+    if (f == g) return true;
+    final d = _lev(g, f);
+    if (g.length >= 4 && d <= (g.length >= 7 ? 2 : 1)) return true;
+  }
+  return false;
 }
