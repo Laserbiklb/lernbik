@@ -199,7 +199,15 @@ class AppState extends ChangeNotifier {
     gid = (d0['gid'] ?? '') as String;
     if (gid.isNotEmpty) await prefs.setString('gid', gid);
     _listenUser();
-    if (gid.isNotEmpty) await joinGroup(gid);
+    if (gid.isNotEmpty) {
+      try {
+        await joinGroup(gid);
+      } on StateError {
+        // The group was deleted: choose a new one.
+        gid = '';
+        await prefs.remove('gid');
+      }
+    }
     notifyListeners();
   }
 
@@ -249,16 +257,13 @@ class AppState extends ChangeNotifier {
       } catch (_) {}
       out.add(GroupInfo(d.id, name, n));
     }
-    if (!out.any((g) => g.id == courseGid)) out.add(GroupInfo(courseGid, courseName, 0));
     out.sort((a, b) => b.members != a.members ? b.members.compareTo(a.members) : a.name.toLowerCase().compareTo(b.name.toLowerCase()));
     return out;
   }
 
   /// Join a group; leaves the previous one (its ranking) first.
   Future<void> joinGroup(String id) async {
-    if (id == courseGid && await groupExists(id) == null) {
-      await db.collection('groups').doc(id).set({'name': courseName, 'created': FieldValue.serverTimestamp(), 'examDate': '', 'examName': ''});
-    }
+    if (await groupExists(id) == null) throw StateError('no group');
     if (gid.isNotEmpty && gid != id) await _memberDoc().delete().catchError((_) {});
     gid = id;
     pendingGroup = null;
@@ -311,9 +316,12 @@ class AppState extends ChangeNotifier {
       remindOn = d['remindOn'] != false;
       if (d['remind'] is List) remind = List<String>.from(d['remind'] as List);
       if (g != gid || _subs.isEmpty) {
+        final moved = g != gid;
         gid = g;
         prefs.setString('gid', gid);
         if (gid.isNotEmpty) _listenGroup();
+        // Moved to another group (e.g. by the admin): the stats go to the new group's ranking.
+        if (moved) learn.setMember(gid.isEmpty || mid.isEmpty ? null : _memberDoc());
       }
       notifyListeners();
     });
