@@ -11,6 +11,7 @@ import 'heute.dart';
 import 'i18n.dart';
 import 'ich.dart';
 import 'learn/data.dart';
+import 'learn/gen_rules.dart';
 import 'learn/trainers.dart';
 import 'learn/tts.dart';
 import 'lernen.dart';
@@ -29,6 +30,7 @@ Future<void> main() async {
   if (useEmulator) FirebaseFirestore.instance.useFirestoreEmulator('localhost', 8080);
   await LearnData.load();
   registerTrainers(state.learn);
+  registerRuleGens();
   Tts.init();
   runApp(const LernbikApp());
   try {

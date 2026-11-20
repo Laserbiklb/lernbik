@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:lernbik/learn/data.dart';
 import 'package:lernbik/learn/exercise.dart';
 import 'package:lernbik/learn/gen_cases.dart';
+import 'package:lernbik/learn/gen_rules.dart';
 import 'package:lernbik/learn/progress.dart';
 import 'package:lernbik/learn/tasks.dart';
 import 'package:lernbik/learn/trainers.dart';
@@ -30,8 +31,22 @@ void main() {
   test('all generators make valid tasks', () async {
     await LearnData.load();
     final p = Progress();
-    registerTrainers(p);
     final r = Random(7);
+    registerTrainers(p);
+    registerRuleGens();
+    for (final e in ruleGens.entries) {
+      for (final g in e.value) {
+        for (var i = 0; i < 300; i++) {
+          check(g(r, 'de'), 'rule gen ${e.key}');
+        }
+      }
+    }
+    // print a sample of each
+    for (final e in ruleGens.entries) {
+      final t = e.value.first(r, 'ru');
+      // ignore: avoid_print
+      print('${e.key}: ${t.text}${t.words.join(' ')} → ${t.answer}${t.answers.join('/')} | ${t.options.join(', ')} | ${t.why}');
+    }
     for (final e in topicGens.entries) {
       for (var i = 0; i < 400; i++) {
         final t = e.value.first(r, 'ru');
