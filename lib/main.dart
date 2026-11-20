@@ -7,13 +7,17 @@ import 'package:flutter/foundation.dart';
 import 'package:material_ui/material_ui.dart';
 
 import 'firebase_options.dart';
-import 'group_screen.dart';
-import 'hw_screen.dart';
+import 'heute.dart';
 import 'i18n.dart';
-import 'learn_screen.dart';
-import 'me_screen.dart';
+import 'ich.dart';
+import 'learn/data.dart';
+import 'learn/trainers.dart';
+import 'learn/tts.dart';
+import 'lernen.dart';
+import 'nav.dart';
 import 'onboarding.dart';
 import 'store.dart';
+import 'theme.dart';
 import 'ui.dart';
 
 final state = AppState();
@@ -23,6 +27,9 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(options: firebaseOptions);
   if (useEmulator) FirebaseFirestore.instance.useFirestoreEmulator('localhost', 8080);
+  await LearnData.load();
+  registerTrainers(state.learn);
+  Tts.init();
   runApp(const LernbikApp());
   try {
     await state.init();
@@ -41,20 +48,20 @@ class LernbikApp extends StatelessWidget {
   const LernbikApp({super.key});
   @override
   Widget build(BuildContext context) => ListenableBuilder(
-        listenable: state,
-        builder: (context, _) => MaterialApp(
-          title: 'Lernbik',
-          debugShowCheckedModeBanner: false,
-          scaffoldMessengerKey: messengerKey,
-          theme: buildTheme(Brightness.light),
-          darkTheme: buildTheme(Brightness.dark),
-          home: !state.ready
-              ? const Scaffold(body: Center(child: Logo(size: 40)))
-              : state.onboarded
-                  ? Shell(s: state)
-                  : Onboarding(s: state),
-        ),
-      );
+    listenable: state,
+    builder: (context, _) => MaterialApp(
+      title: 'Lernbik',
+      debugShowCheckedModeBanner: false,
+      scaffoldMessengerKey: messengerKey,
+      theme: buildTheme(),
+      themeMode: ThemeMode.dark,
+      home: !state.ready
+          ? const Scaffold(body: Center(child: Logo(size: 40)))
+          : state.onboarded
+          ? Shell(s: state)
+          : Onboarding(s: state),
+    ),
+  );
 }
 
 class Shell extends StatefulWidget {
@@ -65,10 +72,8 @@ class Shell extends StatefulWidget {
 }
 
 class _ShellState extends State<Shell> {
-  int tab = 0;
   bool update = false;
   AppState get s => widget.s;
-  String t(String k) => tr(s.lang, k);
 
   @override
   void initState() {
@@ -81,55 +86,106 @@ class _ShellState extends State<Shell> {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
     final androidWeb = kIsWeb && defaultTargetPlatform == TargetPlatform.android;
-    final pages = [HwScreen(s: s), LearnScreen(s: s), GroupScreen(s: s), MeScreen(s: s)];
-    return Scaffold(
-      appBar: AppBar(
-        titleSpacing: 16,
-        title: Row(children: [
-          const Logo(),
-          const SizedBox(width: 10),
-          Flexible(
-              child: Text(tab == 0 && s.groupName.isNotEmpty ? s.groupName : 'Lernbik',
-                  overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w800))),
-        ]),
-        actions: [
-          if (tab != 1) IconButton(tooltip: t('share'), icon: const Icon(Icons.share_outlined), onPressed: () => shareApp(context, s)),
-        ],
+    return ListenableBuilder(
+      listenable: Listenable.merge([nav, s.learn]),
+      builder: (context, _) => Scaffold(
+        body: Column(
+          children: [
+            if (androidWeb)
+              SafeArea(
+                bottom: false,
+                child: Material(
+                  color: L.panel,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.android, size: 18, color: L.das),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: TextButton(
+                            style: TextButton.styleFrom(alignment: Alignment.centerLeft),
+                            onPressed: () => openUrl(apkUrl),
+                            child: Text(tr(s.lang, 'android'), style: L.b(13, L.das)),
+                          ),
+                        ),
+                        TextButton(
+                          onPressed: () => openUrl('lernbik://join'),
+                          child: Text(tr(s.lang, 'openApp'), style: L.b(13, L.der)),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            Expanded(
+              child: IndexedStack(
+                index: nav.tab,
+                children: [
+                  HeuteScreen(s: s, update: update),
+                  LernenScreen(s: s),
+                  IchScreen(s: s),
+                ],
+              ),
+            ),
+          ],
+        ),
+        bottomNavigationBar: _NavBar(lang: s.lang),
       ),
-      body: Column(children: [
-        if (update)
-          MaterialBanner(
-            content: Text(t('update')),
-            leading: const Icon(Icons.system_update),
-            actions: [
-              TextButton(onPressed: () => setState(() => update = false), child: Text(t('cancel'))),
-              FilledButton(onPressed: () => openUrl(apkUrl), child: Text(t('install'))),
+    );
+  }
+}
+
+class _NavBar extends StatelessWidget {
+  final String lang;
+  const _NavBar({required this.lang});
+  @override
+  Widget build(BuildContext context) {
+    final items = [(Icons.wb_sunny_outlined, 'Heute'), (Icons.school_outlined, 'Lernen'), (Icons.person_outline, 'Ich')];
+    return Container(
+      decoration: const BoxDecoration(
+        color: L.navBg,
+        border: Border(top: BorderSide(color: L.line)),
+      ),
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(24, 8, 24, 8),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              for (var i = 0; i < items.length; i++)
+                Semantics(
+                  button: true,
+                  selected: nav.tab == i,
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(16),
+                    onTap: () => nav.go(i),
+                    child: SizedBox(
+                      width: 76,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: nav.tab == i ? L.die.withValues(alpha: .14) : null,
+                              borderRadius: BorderRadius.circular(99),
+                              boxShadow: nav.tab == i ? L.glow(L.die, 10, .4) : null,
+                            ),
+                            child: Icon(items[i].$1, size: 20, color: nav.tab == i ? L.die : L.muted),
+                          ),
+                          const SizedBox(height: 3),
+                          Text(items[i].$2, style: nav.tab == i ? L.b(12, L.die) : L.t(12, c: L.muted)),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
             ],
           ),
-        if (androidWeb)
-          Material(
-            color: cs.secondaryContainer,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              child: Wrap(spacing: 8, crossAxisAlignment: WrapCrossAlignment.center, children: [
-                TextButton.icon(onPressed: () => openUrl(apkUrl), icon: const Icon(Icons.android), label: Text(t('android'))),
-                TextButton(onPressed: () => openUrl('lernbik://join'), child: Text(t('openApp'))),
-              ]),
-            ),
-          ),
-        Expanded(child: IndexedStack(index: tab, children: pages)),
-      ]),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: tab,
-        onDestinationSelected: (i) => setState(() => tab = i),
-        destinations: [
-          NavigationDestination(icon: const Icon(Icons.checklist_outlined), selectedIcon: const Icon(Icons.checklist), label: t('tabHw')),
-          NavigationDestination(icon: const Icon(Icons.school_outlined), selectedIcon: const Icon(Icons.school), label: t('tabLearn')),
-          NavigationDestination(icon: const Icon(Icons.groups_outlined), selectedIcon: const Icon(Icons.groups), label: t('tabGroup')),
-          NavigationDestination(icon: const Icon(Icons.person_outline), selectedIcon: const Icon(Icons.person), label: t('tabMe')),
-        ],
+        ),
       ),
     );
   }

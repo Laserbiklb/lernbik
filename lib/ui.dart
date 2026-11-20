@@ -4,35 +4,6 @@ import 'package:url_launcher/url_launcher.dart';
 import 'i18n.dart';
 import 'store.dart';
 
-/// Brand colors: the three Wortkreis stripes (der / die / das) plus ink.
-const cDer = Color(0xFF2F6FDB);
-const cDie = Color(0xFFD9443A);
-const cDas = Color(0xFF2E9B57);
-
-ThemeData buildTheme(Brightness b) {
-  final scheme = ColorScheme.fromSeed(seedColor: cDer, brightness: b);
-  return ThemeData(
-    colorScheme: scheme,
-    useMaterial3: true,
-    inputDecorationTheme: const InputDecorationTheme(border: OutlineInputBorder()),
-    snackBarTheme: const SnackBarThemeData(behavior: SnackBarBehavior.floating),
-  );
-}
-
-class Logo extends StatelessWidget {
-  final double size;
-  const Logo({super.key, this.size = 22});
-  @override
-  Widget build(BuildContext context) {
-    Widget bar(Color c) => Container(
-        width: size * .28,
-        height: size,
-        margin: EdgeInsets.only(right: size * .1),
-        decoration: BoxDecoration(color: c, borderRadius: BorderRadius.circular(size * .1)));
-    return Row(mainAxisSize: MainAxisSize.min, children: [bar(cDer), bar(cDie), bar(cDas)]);
-  }
-}
-
 Future<bool> confirm(BuildContext context, String lang, String title, {String? body, String? yes, bool danger = false}) async {
   final r = await showDialog<bool>(
     context: context,
@@ -94,9 +65,11 @@ int daysUntil(String date) {
 void toast(BuildContext context, String text, {String? action, VoidCallback? onAction}) {
   final m = ScaffoldMessenger.of(context);
   m.hideCurrentSnackBar();
-  m.showSnackBar(SnackBar(
-    content: Text(text),
-    duration: Duration(seconds: action == null ? 2 : 6),
-    action: action == null ? null : SnackBarAction(label: action, onPressed: onAction ?? () {}),
-  ));
+  m.showSnackBar(
+    SnackBar(
+      content: Text(text),
+      duration: Duration(seconds: action == null ? 2 : 6),
+      action: action == null ? null : SnackBarAction(label: action, onPressed: onAction ?? () {}),
+    ),
+  );
 }

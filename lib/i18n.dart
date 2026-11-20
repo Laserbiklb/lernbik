@@ -326,3 +326,26 @@ const Map<String, Map<String, String>> _t = {
 };
 
 String tr(String lang, String key) => _t[lang]?[key] ?? _t['de']![key] ?? key;
+
+/// Inline translation for new UI text: German, Russian, English.
+String l3(String lang, String de, String ru, String en) => lang == 'ru' ? ru : (lang == 'en' ? en : de);
+
+const _wd = {
+  'de': ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'],
+  'ru': ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'],
+  'en': ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+};
+
+/// "2026-12-13" → "Sa, 13.12." (today / tomorrow by name).
+String shortDate(String lang, String ymd) {
+  final p = ymd.split('-').map(int.tryParse).toList();
+  if (p.length != 3 || p.contains(null)) return ymd;
+  final d = DateTime(p[0]!, p[1]!, p[2]!);
+  final now = DateTime.now();
+  final today = DateTime(now.year, now.month, now.day);
+  final diff = d.difference(today).inDays;
+  if (diff == 0) return l3(lang, 'Heute', 'Сегодня', 'Today');
+  if (diff == 1) return l3(lang, 'Morgen', 'Завтра', 'Tomorrow');
+  if (diff == -1) return l3(lang, 'Gestern', 'Вчера', 'Yesterday');
+  return '${_wd[lang]?[d.weekday - 1] ?? _wd['de']![d.weekday - 1]}, ${p[2].toString().padLeft(2, '0')}.${p[1].toString().padLeft(2, '0')}.';
+}

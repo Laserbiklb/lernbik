@@ -2,7 +2,7 @@ import 'package:material_ui/material_ui.dart';
 
 import 'i18n.dart';
 import 'store.dart';
-import 'ui.dart';
+import 'theme.dart';
 
 /// First start: language → name → group (link, new group, or recovery code).
 class Onboarding extends StatefulWidget {
@@ -46,39 +46,41 @@ class _OnboardingState extends State<Onboarding> {
         child: Center(
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 480),
-            child: ListView(padding: const EdgeInsets.all(20), children: [
-              const SizedBox(height: 12),
-              Row(children: [
-                const Logo(size: 30),
-                const SizedBox(width: 10),
-                Text('Lernbik', style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w800)),
-              ]),
-              const SizedBox(height: 6),
-              Text(t('tagline'), style: Theme.of(context).textTheme.bodyLarge),
-              const SizedBox(height: 24),
-              Text(t('lang'), style: Theme.of(context).textTheme.titleSmall),
-              const SizedBox(height: 8),
-              SegmentedButton<String>(
-                segments: langs.entries.map((e) => ButtonSegment(value: e.key, label: Text(e.value))).toList(),
-                selected: {s.lang},
-                showSelectedIcon: false,
-                onSelectionChanged: (v) => setState(() => s.setLang(v.first)),
-              ),
-              const SizedBox(height: 24),
-              TextField(
-                controller: nickC,
-                textCapitalization: TextCapitalization.words,
-                maxLength: 24,
-                decoration: InputDecoration(labelText: t('nick'), hintText: t('nickHint'), helperText: t('nickInfo'), helperMaxLines: 3),
-                onSubmitted: (_) => _go(),
-              ),
-              const SizedBox(height: 12),
-              FilledButton(onPressed: busy ? null : _go, child: Text(t('next'))),
-              if (err != null) ...[
+            child: ListView(
+              padding: const EdgeInsets.all(20),
+              children: [
                 const SizedBox(height: 12),
-                Text(err!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+                Row(
+                  children: [
+                    const Logo(size: 30),
+                    const SizedBox(width: 10),
+                    Text('Lernbik', style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w800)),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Text(t('tagline'), style: Theme.of(context).textTheme.bodyLarge),
+                const SizedBox(height: 24),
+                Text(t('lang'), style: Theme.of(context).textTheme.titleSmall),
+                const SizedBox(height: 8),
+                SegmentedButton<String>(
+                  segments: langs.entries.map((e) => ButtonSegment(value: e.key, label: Text(e.value))).toList(),
+                  selected: {s.lang},
+                  showSelectedIcon: false,
+                  onSelectionChanged: (v) => setState(() => s.setLang(v.first)),
+                ),
+                const SizedBox(height: 24),
+                TextField(
+                  controller: nickC,
+                  textCapitalization: TextCapitalization.words,
+                  maxLength: 24,
+                  decoration: InputDecoration(labelText: t('nick'), hintText: t('nickHint'), helperText: t('nickInfo'), helperMaxLines: 3),
+                  onSubmitted: (_) => _go(),
+                ),
+                const SizedBox(height: 12),
+                FilledButton(onPressed: busy ? null : _go, child: Text(t('next'))),
+                if (err != null) ...[const SizedBox(height: 12), Text(err!, style: TextStyle(color: Theme.of(context).colorScheme.error))],
               ],
-            ]),
+            ),
           ),
         ),
       ),

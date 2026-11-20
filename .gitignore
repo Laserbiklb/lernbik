@@ -52,3 +52,6 @@ android/key.properties
 *.jks
 *.keystore
 web/wortkreis/
+
+# Rajdhani is downloaded in CI (tools/fonts.sh); locally a stand-in is fine
+assets/fonts/Rajdhani-*.ttf

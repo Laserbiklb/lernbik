@@ -32,3 +32,5 @@ linter:
 
 # Additional information about this file can be found at
 # https://dart.dev/guides/language/analysis-options
+    prefer_function_declarations_over_variables: false
+    sort_child_properties_last: false

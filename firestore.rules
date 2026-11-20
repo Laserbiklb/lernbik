@@ -23,7 +23,10 @@ service cloud.firestore {
     match /groups/{gid} {
       allow get: if signedIn();
       allow create: if signedIn() && request.resource.data.keys().hasOnly(['name', 'created', 'examDate', 'examName']);
-      allow update: if signedIn() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['examDate', 'examName']);
+      // course = the chapter the course is on now; helpers = who may move it (set in the app by admins).
+      allow update: if signedIn() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['examDate', 'examName', 'course', 'helpers'])
+        && (!('course' in request.resource.data) || (request.resource.data.course.lv in ['A1', 'A2'] && request.resource.data.course.n is int))
+        && (!('helpers' in request.resource.data) || (request.resource.data.helpers is list && request.resource.data.helpers.size() <= 20));
 
       // Homework: everyone can add and edit; deleting is a soft delete.
       match /hw/{id} {

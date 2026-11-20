@@ -7,10 +7,14 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'firebase_options.dart';
+import 'learn/progress.dart';
 
 /// The course group. Everyone who opens Lernbik lands here.
 const courseGid = 'vhs-lueneburg';
 const courseName = 'VHS Lüneburg';
+
+/// The main admin (by name). Admins move the course to the next chapter and pick helpers.
+const ownerNick = 'laserbik';
 
 /// "  Anna  Maria " → "anna maria". Same name → same account.
 String nickId(String n) => n.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ').replaceAll('/', '_');
@@ -46,40 +50,47 @@ String? parseGroup(String s) {
   return null;
 }
 
-String ymd(DateTime d) =>
-    '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+String ymd(DateTime d) => '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 
 class Hw {
   final String id, text, due, by, editedBy;
   final bool deleted;
   final DateTime? created, deletedAt;
   Hw(this.id, Map<String, dynamic> d)
-      : text = (d['text'] ?? '') as String,
-        due = (d['due'] ?? '') as String,
-        by = (d['by'] ?? '') as String,
-        editedBy = (d['editedBy'] ?? '') as String,
-        deleted = d['deleted'] == true,
-        created = (d['created'] as Timestamp?)?.toDate(),
-        deletedAt = (d['deletedAt'] as Timestamp?)?.toDate();
+    : text = (d['text'] ?? '') as String,
+      due = (d['due'] ?? '') as String,
+      by = (d['by'] ?? '') as String,
+      editedBy = (d['editedBy'] ?? '') as String,
+      deleted = d['deleted'] == true,
+      created = (d['created'] as Timestamp?)?.toDate(),
+      deletedAt = (d['deletedAt'] as Timestamp?)?.toDate();
 }
 
 class News {
   final String id, text, by;
   final DateTime? created;
   News(this.id, Map<String, dynamic> d)
-      : text = (d['text'] ?? '') as String,
-        by = (d['by'] ?? '') as String,
-        created = (d['created'] as Timestamp?)?.toDate();
+    : text = (d['text'] ?? '') as String,
+      by = (d['by'] ?? '') as String,
+      created = (d['created'] as Timestamp?)?.toDate();
 }
 
 class Member {
-  final String id, nick;
-  final int words, topics, streak;
+  final String id, nick, day;
+  final int words, topics, streak, xp;
   Member(this.id, Map<String, dynamic> d)
-      : nick = (d['nick'] ?? '') as String,
-        words = (d['words'] ?? 0) as int,
-        topics = (d['topics'] ?? 0) as int,
-        streak = (d['streak'] ?? 0) as int;
+    : nick = (d['nick'] ?? '') as String,
+      day = (d['day'] ?? '') as String,
+      words = (d['words'] as num? ?? 0).toInt(),
+      topics = (d['topics'] as num? ?? 0).toInt(),
+      xp = (d['xp'] as num? ?? 0).toInt(),
+      streak = (d['streak'] as num? ?? 0).toInt();
+
+  /// A streak only counts while it is alive (last learning day today or yesterday).
+  int get liveStreak {
+    final now = DateTime.now();
+    return day == dayStr(now) || day == dayStr(now.subtract(const Duration(days: 1))) ? streak : 0;
+  }
 }
 
 class AppState extends ChangeNotifier {
@@ -92,7 +103,11 @@ class AppState extends ChangeNotifier {
   String nick = '';
   String gid = '';
   String groupName = '';
-  String examDate = '', examName = '';
+  String courseLv = 'A1';
+  int courseN = 1;
+  String courseSince = '';
+  List<Map<String, String>> helpers = []; // [{mid, nick}]
+  final learn = Progress();
   bool remindOn = true;
   List<String> remind = ['10:00', '22:00'];
   Map<String, bool> done = {};
@@ -197,6 +212,7 @@ class AppState extends ChangeNotifier {
     if (!snap.exists) await ref.set({'key': key, 'nick': n});
     nick = n;
     await prefs.setString('nick', nick);
+    learn.setNick(nick);
     userDoc.set({'nick': nick}, SetOptions(merge: true));
     if (gid.isNotEmpty) _memberDoc().set({'nick': nick}, SetOptions(merge: true));
     notifyListeners();
@@ -210,12 +226,7 @@ class AppState extends ChangeNotifier {
 
   Future<void> joinGroup(String id) async {
     if (id == courseGid && await groupExists(id) == null) {
-      await db.collection('groups').doc(id).set({
-        'name': courseName,
-        'created': FieldValue.serverTimestamp(),
-        'examDate': '',
-        'examName': '',
-      });
+      await db.collection('groups').doc(id).set({'name': courseName, 'created': FieldValue.serverTimestamp(), 'examDate': '', 'examName': ''});
     }
     gid = id;
     pendingGroup = null;
@@ -228,12 +239,7 @@ class AppState extends ChangeNotifier {
 
   Future<void> createGroup(String name) async {
     final id = randomId(10);
-    await db.collection('groups').doc(id).set({
-      'name': name.trim(),
-      'created': FieldValue.serverTimestamp(),
-      'examDate': '',
-      'examName': '',
-    });
+    await db.collection('groups').doc(id).set({'name': name.trim(), 'created': FieldValue.serverTimestamp(), 'examDate': '', 'examName': ''});
     await joinGroup(id);
   }
 
@@ -251,6 +257,7 @@ class AppState extends ChangeNotifier {
   StreamSubscription? _userSub;
   void _listenUser() {
     _userSub?.cancel();
+    learn.attach(key, nick, mid.isEmpty ? null : db.collection('groups').doc(courseGid).collection('members').doc(mid));
     _userSub = userDoc.snapshots().listen((s) {
       final d = s.data() ?? {};
       nick = (d['nick'] ?? nick) as String;
@@ -267,34 +274,47 @@ class AppState extends ChangeNotifier {
       notifyListeners();
     });
     if (gid.isNotEmpty) _listenGroup();
-    userDoc.set({'tz': DateTime.now().timeZoneOffset.inMinutes, 'seen': FieldValue.serverTimestamp()},
-        SetOptions(merge: true));
+    userDoc.set({'tz': DateTime.now().timeZoneOffset.inMinutes, 'seen': FieldValue.serverTimestamp()}, SetOptions(merge: true));
   }
 
   void _listenGroup() {
     _cancelGroup();
     if (gid.isEmpty) return;
-    _subs.add(groupDoc.snapshots().listen((s) {
-      final d = s.data() ?? {};
-      groupName = (d['name'] ?? '') as String;
-      examDate = (d['examDate'] ?? '') as String;
-      examName = (d['examName'] ?? '') as String;
-      notifyListeners();
-    }));
-    _subs.add(groupDoc.collection('hw').snapshots().listen((s) {
-      hw = s.docs.map((d) => Hw(d.id, d.data())).toList();
-      notifyListeners();
-    }));
-    _subs.add(groupDoc.collection('news').where('deleted', isEqualTo: false).snapshots().listen((s) {
-      news = s.docs.map((d) => News(d.id, d.data())).toList()
-        ..sort((a, b) => (b.created ?? DateTime(2100)).compareTo(a.created ?? DateTime(2100)));
-      notifyListeners();
-    }));
-    _subs.add(groupDoc.collection('members').snapshots().listen((s) {
-      members = s.docs.map((d) => Member(d.id, d.data())).toList()
-        ..sort((a, b) => b.words.compareTo(a.words));
-      notifyListeners();
-    }));
+    _subs.add(
+      groupDoc.snapshots().listen((s) {
+        final d = s.data() ?? {};
+        groupName = (d['name'] ?? '') as String;
+        final c = d['course'];
+        if (c is Map) {
+          courseLv = c['lv'] == 'A2' ? 'A2' : 'A1';
+          courseN = (c['n'] as num? ?? 1).toInt();
+          courseSince = (c['since'] ?? '') as String;
+        }
+        helpers = [
+          for (final h in (d['helpers'] as List? ?? []))
+            if (h is Map) {'mid': '${h['mid'] ?? ''}', 'nick': '${h['nick'] ?? ''}'},
+        ];
+        notifyListeners();
+      }),
+    );
+    _subs.add(
+      groupDoc.collection('hw').snapshots().listen((s) {
+        hw = s.docs.map((d) => Hw(d.id, d.data())).toList();
+        notifyListeners();
+      }),
+    );
+    _subs.add(
+      groupDoc.collection('news').where('deleted', isEqualTo: false).snapshots().listen((s) {
+        news = s.docs.map((d) => News(d.id, d.data())).toList()..sort((a, b) => (b.created ?? DateTime(2100)).compareTo(a.created ?? DateTime(2100)));
+        notifyListeners();
+      }),
+    );
+    _subs.add(
+      groupDoc.collection('members').snapshots().listen((s) {
+        members = s.docs.map((d) => Member(d.id, d.data())).toList()..sort((a, b) => b.words.compareTo(a.words));
+        notifyListeners();
+      }),
+    );
   }
 
   void _cancelGroup() {
@@ -311,26 +331,19 @@ class AppState extends ChangeNotifier {
 
   // ---------- homework ----------
   Future<void> addHw(String text, String due) => groupDoc.collection('hw').add({
-        'text': text.trim(),
-        'due': due,
-        'by': nick,
-        'created': FieldValue.serverTimestamp(),
-        'updated': FieldValue.serverTimestamp(),
-        'deleted': false,
-      });
+    'text': text.trim(),
+    'due': due,
+    'by': nick,
+    'created': FieldValue.serverTimestamp(),
+    'updated': FieldValue.serverTimestamp(),
+    'deleted': false,
+  });
 
-  Future<void> editHw(String id, String text, String due) => groupDoc.collection('hw').doc(id).update({
-        'text': text.trim(),
-        'due': due,
-        'editedBy': nick,
-        'updated': FieldValue.serverTimestamp(),
-      });
+  Future<void> editHw(String id, String text, String due) =>
+      groupDoc.collection('hw').doc(id).update({'text': text.trim(), 'due': due, 'editedBy': nick, 'updated': FieldValue.serverTimestamp()});
 
-  Future<void> setDeleted(String id, bool v) => groupDoc.collection('hw').doc(id).update({
-        'deleted': v,
-        'deletedAt': FieldValue.serverTimestamp(),
-        'editedBy': nick,
-      });
+  Future<void> setDeleted(String id, bool v) =>
+      groupDoc.collection('hw').doc(id).update({'deleted': v, 'deletedAt': FieldValue.serverTimestamp(), 'editedBy': nick});
 
   void setDone(String id, bool v) {
     if (v) {
@@ -340,42 +353,39 @@ class AppState extends ChangeNotifier {
     }
     notifyListeners();
     userDoc.set({
-      'done': {id: v ? true : FieldValue.delete()}
+      'done': {id: v ? true : FieldValue.delete()},
     }, SetOptions(merge: true));
   }
 
   // ---------- notices and exam ----------
-  Future<void> addNews(String text) => groupDoc.collection('news').add({
-        'text': text.trim(),
-        'by': nick,
-        'created': FieldValue.serverTimestamp(),
-        'deleted': false,
-      });
+  Future<void> addNews(String text) =>
+      groupDoc.collection('news').add({'text': text.trim(), 'by': nick, 'created': FieldValue.serverTimestamp(), 'deleted': false});
 
   Future<void> setNewsDeleted(String id, bool v) => groupDoc.collection('news').doc(id).update({'deleted': v});
 
-  Future<void> setExam(String date, String name) =>
-      groupDoc.set({'examDate': date, 'examName': name.trim()}, SetOptions(merge: true));
+  // ---------- course chapter (admins) ----------
+  bool get isOwner => nickId(nick) == ownerNick;
+  bool get isAdmin => isOwner || helpers.any((h) => h['mid'] == mid);
+
+  Future<void> setCourse(String lv, int n) => groupDoc.set({
+    'course': {'lv': lv, 'n': n, 'since': ymd(DateTime.now())},
+  }, SetOptions(merge: true));
+
+  Future<void> setHelpers(List<Map<String, String>> h) => groupDoc.set({'helpers': h}, SetOptions(merge: true));
 
   // ---------- reminders ----------
   void setRemind(bool on, List<String> times) {
     remindOn = on;
     remind = times..sort();
     notifyListeners();
-    userDoc.set({'remindOn': on, 'remind': remind, 'tz': DateTime.now().timeZoneOffset.inMinutes},
-        SetOptions(merge: true));
+    userDoc.set({'remindOn': on, 'remind': remind, 'tz': DateTime.now().timeZoneOffset.inMinutes}, SetOptions(merge: true));
   }
 
   Future<void> saveToken(String token) => userDoc.set({
-        'tokens': FieldValue.arrayUnion([token]),
-        'tz': DateTime.now().timeZoneOffset.inMinutes,
-      }, SetOptions(merge: true));
+    'tokens': FieldValue.arrayUnion([token]),
+    'tz': DateTime.now().timeZoneOffset.inMinutes,
+  }, SetOptions(merge: true));
 
-  Future<void> report(String text, String where) => db.collection('reports').add({
-        'text': text.trim(),
-        'where': where,
-        'nick': nick,
-        'gid': gid,
-        'created': FieldValue.serverTimestamp(),
-      });
+  Future<void> report(String text, String where) =>
+      db.collection('reports').add({'text': text.trim(), 'where': where, 'nick': nick, 'gid': gid, 'created': FieldValue.serverTimestamp()});
 }
