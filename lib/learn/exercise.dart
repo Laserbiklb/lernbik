@@ -1,3 +1,5 @@
+import '../fx.dart';
+
 import 'dart:async';
 import 'dart:math';
 
@@ -180,6 +182,9 @@ class _ExerciseScreenState extends State<ExerciseScreen> {
       cur = null;
       finished = true;
       widget.onDone?.call(miss.isEmpty, right, total - miss.length, total);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) confetti(context, count: miss.isEmpty ? 110 : 50);
+      });
       setState(() {});
       return;
     }
@@ -331,11 +336,7 @@ class _ExerciseScreenState extends State<ExerciseScreen> {
         if (t.cue.isNotEmpty || t.html.isNotEmpty) out.add(_prompt(t));
         out.add(const SizedBox(height: 10));
         out.add(
-          TokenLine(
-            tokens: [for (final i in oPick) t.words[i]],
-            placeholder: true,
-            onTap: locked ? null : (j) => setState(() => oPool.add(oPick.removeAt(j))),
-          ),
+          TokenLine(tokens: [for (final i in oPick) t.words[i]], placeholder: true, onTap: locked ? null : (j) => setState(() => oPool.add(oPick.removeAt(j)))),
         );
         out.add(const SizedBox(height: 12));
         out.add(
@@ -359,10 +360,7 @@ class _ExerciseScreenState extends State<ExerciseScreen> {
           TokenLine(
             tokens: toks,
             states: locked
-                ? [
-                    for (var i = 0; i < toks.length; i++)
-                      _bare(toks[i]) == _bare(t.wrong) ? OptState.bad : (i == tapped ? OptState.sel : OptState.idle),
-                  ]
+                ? [for (var i = 0; i < toks.length; i++) _bare(toks[i]) == _bare(t.wrong) ? OptState.bad : (i == tapped ? OptState.sel : OptState.idle)]
                 : null,
             onTap: locked
                 ? null
@@ -504,10 +502,7 @@ class _ExerciseScreenState extends State<ExerciseScreen> {
         child: Text.rich(
           TextSpan(
             children: [
-              TextSpan(
-                text: ok ? '${l('Richtig', 'Верно', 'Right')}: ' : '${l('Gebraucht wird', 'Нужен', 'Needed')}: ',
-                style: L.b(13, ok ? L.das : L.die),
-              ),
+              TextSpan(text: ok ? '${l('Richtig', 'Верно', 'Right')}: ' : '${l('Gebraucht wird', 'Нужен', 'Needed')}: ', style: L.b(13, ok ? L.das : L.die)),
               TextSpan(text: '${caseNames[st.c]}. ', style: L.b(13)),
               htmlSpan(st.explain, size: 13, color: L.ink2),
             ],
@@ -602,7 +597,12 @@ class _ExerciseScreenState extends State<ExerciseScreen> {
       const SizedBox(height: 8),
       Text('$first ${l('von', 'из', 'of')} $total ${l('beim ersten Versuch', 'с первой попытки', 'at first try')}', style: L.h(30)),
       const SizedBox(height: 6),
-      Text('+$right XP', style: L.b(15, L.sign)),
+      CountUp(
+        right,
+        prefix: '+',
+        suffix: ' XP',
+        style: L.h(24, L.sign).copyWith(shadows: L.glow(L.sign, 12, .7)),
+      ),
       if (widget.doneExtra != null) ...[const SizedBox(height: 14), widget.doneExtra!(context, clean, first, total)],
       if (miss.isNotEmpty) ...[
         const SizedBox(height: 14),

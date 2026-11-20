@@ -2,6 +2,7 @@ import 'package:material_ui/material_ui.dart';
 
 import '../i18n.dart';
 import '../ui.dart' show openTranslate;
+import '../fx.dart';
 import '../theme.dart';
 
 enum OptState { idle, sel, good, bad, dim }
@@ -29,35 +30,46 @@ class OptionTile extends StatelessWidget {
     final hot = state == OptState.good || state == OptState.bad || state == OptState.sel;
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
-      child: Opacity(
-        opacity: state == OptState.dim ? .45 : 1,
-        child: Container(
-          decoration: BoxDecoration(
-            color: hot ? c.withValues(alpha: .16) : L.panel,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: hot ? c : L.line, width: hot ? 2 : 1),
-            boxShadow: hot ? L.glow(c, 18, .55) : null,
-          ),
-          child: Material(
-            type: MaterialType.transparency,
-            child: InkWell(
-              borderRadius: BorderRadius.circular(16),
-              onTap: onTap,
-              child: Padding(
-                padding: EdgeInsets.symmetric(horizontal: 16, vertical: big ? 14 : 13),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 6,
-                      height: big ? 32 : 24,
-                      decoration: BoxDecoration(color: c, borderRadius: BorderRadius.circular(3), boxShadow: L.glow(c, 8, .9)),
+      child: Shake(
+        active: state == OptState.bad,
+        child: Pop(
+          active: state == OptState.good,
+          child: Pressable(
+            enabled: onTap != null,
+            child: AnimatedOpacity(
+              duration: Fx.d(250),
+              opacity: state == OptState.dim ? .45 : 1,
+              child: AnimatedContainer(
+                duration: Fx.d(200),
+                decoration: BoxDecoration(
+                  color: hot ? c.withValues(alpha: .16) : L.panel,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: hot ? c : L.line, width: hot ? 2 : 1),
+                  boxShadow: hot ? L.glow(c, 18, .55) : null,
+                ),
+                child: Material(
+                  type: MaterialType.transparency,
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(16),
+                    onTap: onTap,
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 16, vertical: big ? 14 : 13),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 6,
+                            height: big ? 32 : 24,
+                            decoration: BoxDecoration(color: c, borderRadius: BorderRadius.circular(3), boxShadow: L.glow(c, 8, .9)),
+                          ),
+                          const SizedBox(width: 14),
+                          Expanded(child: Text(label, style: big ? L.h(30, c) : L.b(15))),
+                          if (state == OptState.good) Text('✓', style: L.h(24, L.das)),
+                          if (state == OptState.bad) Text('✕', style: L.h(22, L.die)),
+                          if (num != null && state == OptState.idle) Text('$num', style: L.t(12, c: L.muted)),
+                        ],
+                      ),
                     ),
-                    const SizedBox(width: 14),
-                    Expanded(child: Text(label, style: big ? L.h(30, c) : L.b(15))),
-                    if (state == OptState.good) Text('✓', style: L.h(24, L.das)),
-                    if (state == OptState.bad) Text('✕', style: L.h(22, L.die)),
-                    if (num != null && state == OptState.idle) Text('$num', style: L.t(12, c: L.muted)),
-                  ],
+                  ),
                 ),
               ),
             ),
@@ -217,53 +229,55 @@ class Verdict extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = ok ? L.das : L.die;
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: c.withValues(alpha: .1),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: c.withValues(alpha: .5)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text.rich(
-            TextSpan(
-              children: [
-                TextSpan(
-                  text: ok ? '${l3(lang, 'Richtig!', 'Верно!', 'Correct!')} ' : '${l3(lang, 'Leider nicht.', 'Мимо.', 'Not quite.')} ',
-                  style: L.b(15, c),
-                ),
-                text,
-              ],
+    return Appear(
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: c.withValues(alpha: .1),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: c.withValues(alpha: .5)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text.rich(
+              TextSpan(
+                children: [
+                  TextSpan(
+                    text: ok ? '${l3(lang, 'Richtig!', 'Верно!', 'Correct!')} ' : '${l3(lang, 'Leider nicht.', 'Мимо.', 'Not quite.')} ',
+                    style: L.b(15, c),
+                  ),
+                  text,
+                ],
+              ),
+              style: L.t(15),
             ),
-            style: L.t(15),
-          ),
-          if (why != null && why!.isNotEmpty) ...[const SizedBox(height: 6), Text(why!, style: L.t(13, c: L.ink2))],
-          if (onNext != null || onSay != null || onTranslate != null) ...[
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                if (onNext != null)
-                  Expanded(
-                    child: GlowButton(l3(lang, 'Weiter', 'Дальше', 'Next'), color: L.die, size: 16, onTap: onNext),
-                  ),
-                if (onSay != null)
-                  IconButton(
-                    tooltip: l3(lang, 'Anhören', 'Послушать', 'Listen'),
-                    onPressed: onSay,
-                    icon: const Icon(Icons.volume_up_outlined, color: L.der),
-                  ),
-                if (onTranslate != null)
-                  IconButton(
-                    tooltip: l3(lang, 'Übersetzen', 'Перевести', 'Translate'),
-                    onPressed: () => openGoogle(onTranslate!),
-                    icon: const Icon(Icons.translate, color: L.muted, size: 20),
-                  ),
-              ],
-            ),
+            if (why != null && why!.isNotEmpty) ...[const SizedBox(height: 6), Text(why!, style: L.t(13, c: L.ink2))],
+            if (onNext != null || onSay != null || onTranslate != null) ...[
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  if (onNext != null)
+                    Expanded(
+                      child: GlowButton(l3(lang, 'Weiter', 'Дальше', 'Next'), color: L.die, size: 16, onTap: onNext),
+                    ),
+                  if (onSay != null)
+                    IconButton(
+                      tooltip: l3(lang, 'Anhören', 'Послушать', 'Listen'),
+                      onPressed: onSay,
+                      icon: const Icon(Icons.volume_up_outlined, color: L.der),
+                    ),
+                  if (onTranslate != null)
+                    IconButton(
+                      tooltip: l3(lang, 'Übersetzen', 'Перевести', 'Translate'),
+                      onPressed: () => openGoogle(onTranslate!),
+                      icon: const Icon(Icons.translate, color: L.muted, size: 20),
+                    ),
+                ],
+              ),
+            ],
           ],
-        ],
+        ),
       ),
     );
   }
@@ -283,24 +297,32 @@ class PairCell extends StatelessWidget {
       _ => L.line,
     };
     final hot = state != OptState.idle;
-    return Opacity(
-      opacity: state == OptState.good ? .5 : 1,
-      child: Container(
-        constraints: const BoxConstraints(minHeight: 56),
-        decoration: BoxDecoration(
-          color: hot ? c.withValues(alpha: .15) : L.panel,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: hot ? c : L.line, width: state == OptState.sel ? 2 : 1),
-          boxShadow: state == OptState.sel || state == OptState.bad ? L.glow(c, 14, .6) : null,
-        ),
-        child: Material(
-          type: MaterialType.transparency,
-          child: InkWell(
-            borderRadius: BorderRadius.circular(12),
-            onTap: onTap,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 14),
-              child: Center(child: child),
+    return Shake(
+      active: state == OptState.bad,
+      child: Pop(
+        active: state == OptState.good,
+        child: AnimatedOpacity(
+          duration: Fx.d(300),
+          opacity: state == OptState.good ? .5 : 1,
+          child: AnimatedContainer(
+            duration: Fx.d(200),
+            constraints: const BoxConstraints(minHeight: 56),
+            decoration: BoxDecoration(
+              color: hot ? c.withValues(alpha: .15) : L.panel,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: hot ? c : L.line, width: state == OptState.sel ? 2 : 1),
+              boxShadow: state == OptState.sel || state == OptState.bad ? L.glow(c, 14, .6) : null,
+            ),
+            child: Material(
+              type: MaterialType.transparency,
+              child: InkWell(
+                borderRadius: BorderRadius.circular(12),
+                onTap: onTap,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 14),
+                  child: Center(child: child),
+                ),
+              ),
             ),
           ),
         ),
@@ -320,11 +342,12 @@ class LevelDots extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         for (var i = 1; i <= 5; i++)
-          Container(
+          AnimatedContainer(
+            duration: Fx.d(400 + i * 120),
             width: 7,
             height: 7,
             margin: const EdgeInsets.only(left: 3),
-            decoration: BoxDecoration(color: b >= i ? L.das : L.line, shape: BoxShape.circle),
+            decoration: BoxDecoration(color: b >= i ? L.das : L.line, shape: BoxShape.circle, boxShadow: b >= i ? L.glow(L.das, 5, .8) : null),
           ),
       ],
     ),

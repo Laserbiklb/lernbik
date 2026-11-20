@@ -7,6 +7,7 @@ import 'package:flutter/foundation.dart';
 import 'package:material_ui/material_ui.dart';
 
 import 'firebase_options.dart';
+import 'fx.dart';
 import 'heute.dart';
 import 'i18n.dart';
 import 'ich.dart';
@@ -169,14 +170,21 @@ class _NavBar extends StatelessWidget {
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                          AnimatedContainer(
+                            duration: Fx.d(260),
+                            curve: Curves.easeOutCubic,
+                            padding: EdgeInsets.symmetric(horizontal: nav.tab == i ? 18 : 14, vertical: 4),
                             decoration: BoxDecoration(
                               color: nav.tab == i ? L.die.withValues(alpha: .14) : null,
                               borderRadius: BorderRadius.circular(99),
                               boxShadow: nav.tab == i ? L.glow(L.die, 10, .4) : null,
                             ),
-                            child: Icon(items[i].$1, size: 20, color: nav.tab == i ? L.die : L.muted),
+                            child: AnimatedScale(
+                              scale: nav.tab == i ? 1.12 : 1,
+                              duration: Fx.d(260),
+                              curve: Curves.easeOutBack,
+                              child: Icon(items[i].$1, size: 20, color: nav.tab == i ? L.die : L.muted),
+                            ),
                           ),
                           const SizedBox(height: 3),
                           Text(items[i].$2, style: nav.tab == i ? L.b(12, L.die) : L.t(12, c: L.muted)),

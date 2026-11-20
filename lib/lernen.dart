@@ -1,6 +1,7 @@
 import 'package:flutter/services.dart';
 import 'package:material_ui/material_ui.dart';
 
+import 'fx.dart';
 import 'i18n.dart';
 import 'learn/data.dart';
 import 'learn/exercise.dart';
@@ -442,10 +443,18 @@ void practiseRule(BuildContext context, AppState s, Rule r) {
                 Row(
                   children: [
                     Expanded(child: Text(l('Runden ohne Fehler', 'Заходы без ошибок', 'Runs without mistakes'), style: L.b(13))),
-                    Text(
-                      runs >= runsToLearn ? '✓ ${l('gelernt', 'выучено', 'learned')}' : '${runs.clamp(0, runsToLearn)} / $runsToLearn',
-                      style: L.b(13, runs >= runsToLearn ? L.das : L.sign),
-                    ),
+                    if (runs >= runsToLearn)
+                      Appear(
+                        delay: 500,
+                        dy: 0,
+                        child: Breathe(
+                          color: L.das,
+                          radius: 99,
+                          child: Pill('✓ ${l('Thema gelernt', 'тема выучена', 'topic learned')}', color: L.das),
+                        ),
+                      )
+                    else
+                      Text('${runs.clamp(0, runsToLearn)} / $runsToLearn', style: L.b(13, L.sign)),
                   ],
                 ),
                 const SizedBox(height: 8),

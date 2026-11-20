@@ -76,6 +76,12 @@ class _GroupPickerState extends State<GroupPicker> {
             // A group from an invite link comes first.
             final pi = list.indexWhere((g) => g.id == s.pendingGroup);
             if (pi > 0) list.insert(0, list.removeAt(pi));
+            if (list.isEmpty) {
+              return Padding(
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                child: Text(l('Noch keine Gruppen — erstelle die erste.', 'Групп пока нет — создайте первую.', 'No groups yet — create the first one.'), style: L.t(14, c: L.muted)),
+              );
+            }
             return Panel(
               child: Rows([
                 for (final g in list)

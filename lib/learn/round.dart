@@ -1,3 +1,5 @@
+import '../fx.dart';
+
 import 'dart:async';
 import 'dart:math';
 
@@ -407,6 +409,9 @@ class _RoundScreenState extends State<RoundScreen> {
     results = [for (final w in done) (w, p.prog[w.k]?.b ?? 0, missed.contains(w.k))];
     phase = 'done';
     cur = null;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && results.isNotEmpty) confetti(context, count: missed.isEmpty ? 110 : 60);
+    });
     if (now < 0) return;
   }
 
@@ -461,7 +466,20 @@ class _RoundScreenState extends State<RoundScreen> {
           ),
         ),
         const SizedBox(width: 10),
-        if (combo >= 2) ...[Text('×$combo', style: L.h(16, L.sign)), const SizedBox(width: 8)],
+        AnimatedSwitcher(
+          duration: Fx.d(260),
+          transitionBuilder: (c, a) => ScaleTransition(
+            scale: CurvedAnimation(parent: a, curve: Curves.easeOutBack),
+            child: c,
+          ),
+          child: combo >= 2
+              ? Padding(
+                  key: ValueKey(combo),
+                  padding: const EdgeInsets.only(right: 8),
+                  child: Text('×$combo', style: L.h(16 + min(combo, 8).toDouble(), L.sign).copyWith(shadows: L.glow(L.sign, 10, .8))),
+                )
+              : const SizedBox.shrink(key: ValueKey(0)),
+        ),
         Text('$doneN/$total', style: L.b(14, L.muted)),
       ],
     ),
@@ -853,7 +871,17 @@ class _RoundScreenState extends State<RoundScreen> {
         if (results.isEmpty)
           Text(l('In dieser Auswahl gab es keine Nomen.', 'В этой подборке нет существительных.', 'There were no nouns in this set.'), style: L.t(15)),
         const SizedBox(height: 6),
-        Text('+${right + bonus} XP${bonus > 0 ? ' (${l('Bonus für Serien', 'бонус за серии', 'streak bonus')}: +$bonus)' : ''}', style: L.b(15, L.sign)),
+        Row(
+          children: [
+            CountUp(
+              right + bonus,
+              prefix: '+',
+              suffix: ' XP',
+              style: L.h(24, L.sign).copyWith(shadows: L.glow(L.sign, 12, .7)),
+            ),
+            if (bonus > 0) Text('  (${l('Bonus für Serien', 'бонус за серии', 'streak bonus')}: +$bonus)', style: L.t(13, c: L.muted)),
+          ],
+        ),
         const SizedBox(height: 8),
         Text(
           l(

@@ -1,6 +1,7 @@
 import 'package:material_ui/material_ui.dart';
 
 import 'firebase_options.dart';
+import 'fx.dart';
 import 'i18n.dart';
 import 'learn/data.dart';
 import 'nav.dart';
@@ -119,11 +120,7 @@ class _StreakPill extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-    decoration: BoxDecoration(
-      color: const Color(0xFF2A1A10),
-      borderRadius: BorderRadius.circular(99),
-      boxShadow: L.glow(const Color(0xFFFF8A00), 12, .45),
-    ),
+    decoration: BoxDecoration(color: const Color(0xFF2A1A10), borderRadius: BorderRadius.circular(99), boxShadow: L.glow(const Color(0xFFFF8A00), 12, .45)),
     child: Row(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -173,9 +170,7 @@ class _NewsStrip extends StatelessWidget {
           const SizedBox(width: 8),
           Expanded(
             child: Text(
-              has
-                  ? s.news.first.text
-                  : l('Keine Hinweise · antippen zum Hinzufügen', 'Объявлений нет · нажми, чтобы добавить', 'No notices · tap to add'),
+              has ? s.news.first.text : l('Keine Hinweise · antippen zum Hinzufügen', 'Объявлений нет · нажми, чтобы добавить', 'No notices · tap to add'),
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
               style: has ? L.b(14) : L.t(13, c: L.muted),
@@ -210,7 +205,15 @@ class _TaskRow extends StatelessWidget {
               label: l3(s.lang, 'Erledigt', 'Сделано', 'Done'),
               child: IconButton(
                 onPressed: () => s.setDone(h.id, !isDone),
-                icon: Icon(isDone ? Icons.check_circle : Icons.radio_button_unchecked, color: isDone ? L.das : L.muted, size: 22),
+                icon: Pop(
+                  active: isDone,
+                  scale: 1.35,
+                  child: AnimatedSwitcher(
+                    duration: Fx.d(220),
+                    transitionBuilder: (c, a) => ScaleTransition(scale: a, child: c),
+                    child: Icon(isDone ? Icons.check_circle : Icons.radio_button_unchecked, key: ValueKey(isDone), color: isDone ? L.das : L.muted, size: 22),
+                  ),
+                ),
               ),
             ),
             Expanded(
@@ -248,17 +251,20 @@ class _ChapterRow extends StatelessWidget {
           padding: EdgeInsets.symmetric(horizontal: 14, vertical: now ? 12 : 9),
           child: Row(
             children: [
-              Container(
-                width: 26,
-                height: 26,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: now ? L.der : col.withValues(alpha: done >= .999 || past ? .2 : .08),
-                  borderRadius: BorderRadius.circular(7),
-                  border: Border.all(color: now ? L.der : col.withValues(alpha: .7)),
-                  boxShadow: now ? L.glow(L.der, 10, .7) : null,
+              _maybeBreathe(
+                now,
+                Container(
+                  width: 26,
+                  height: 26,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: now ? L.der : col.withValues(alpha: done >= .999 || past ? .2 : .08),
+                    borderRadius: BorderRadius.circular(7),
+                    border: Border.all(color: now ? L.der : col.withValues(alpha: .7)),
+                    boxShadow: now ? L.glow(L.der, 10, .7) : null,
+                  ),
+                  child: Text(done >= .999 ? '✓' : '${c.n}', style: L.h(14, now ? Colors.white : col)),
                 ),
-                child: Text(done >= .999 ? '✓' : '${c.n}', style: L.h(14, now ? Colors.white : col)),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -439,12 +445,7 @@ Future<void> taskSheet(BuildContext context, AppState s, Hw h) async {
                   Navigator.pop(ctx);
                   await s.setDeleted(h.id, true);
                   if (context.mounted) {
-                    toast(
-                      context,
-                      l('Gelöscht', 'Удалено', 'Deleted'),
-                      action: l('Rückgängig', 'Отменить', 'Undo'),
-                      onAction: () => s.setDeleted(h.id, false),
-                    );
+                    toast(context, l('Gelöscht', 'Удалено', 'Deleted'), action: l('Rückgängig', 'Отменить', 'Undo'), onAction: () => s.setDeleted(h.id, false));
                   }
                 },
               ),
@@ -595,3 +596,6 @@ class TrashScreen extends StatelessWidget {
     );
   }
 }
+
+/// The current course chapter glows softly.
+Widget _maybeBreathe(bool on, Widget child) => on ? Breathe(color: L.der, radius: 7, child: child) : child;

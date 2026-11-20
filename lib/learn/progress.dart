@@ -1,3 +1,5 @@
+import '../fx.dart';
+
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
@@ -39,6 +41,10 @@ class Progress extends ChangeNotifier {
   int rsize = 12;
   bool voice = true;
 
+  /// Neon animations on/off (mirrored into [Fx.on]).
+  bool get anim => Fx.on;
+  set anim(bool v) => Fx.on = v;
+
   String _key = '';
   DocumentReference<Map<String, dynamic>>? _cloud;
   DocumentReference<Map<String, dynamic>>? _member;
@@ -66,6 +72,7 @@ class Progress extends ChangeNotifier {
     'best': best,
     'rsize': rsize,
     'voice': voice,
+    'anim': anim,
   };
 
   void _fromJson(Map<String, dynamic> o) {
@@ -96,6 +103,7 @@ class Progress extends ChangeNotifier {
     };
     rsize = [6, 12, 20].contains(o['rsize']) ? o['rsize'] as int : 12;
     voice = o['voice'] != false;
+    anim = o['anim'] != false;
   }
 
   /// The member document of the current group (stats for the ranking); null when in no group.

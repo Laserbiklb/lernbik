@@ -1,5 +1,7 @@
 import 'package:material_ui/material_ui.dart';
 
+import 'fx.dart';
+
 /// Laserbik: always dark, article colors glow like laser beams.
 abstract final class L {
   static const bg = Color(0xFF0A0C11);
@@ -38,8 +40,7 @@ abstract final class L {
   ];
 
   static TextStyle h(double size, [Color c = ink]) => TextStyle(fontFamily: head, fontWeight: FontWeight.w700, fontSize: size, color: c, height: 1.1);
-  static TextStyle t(double size, {Color c = ink, FontWeight w = FontWeight.w400}) =>
-      TextStyle(fontFamily: body, fontSize: size, color: c, fontWeight: w);
+  static TextStyle t(double size, {Color c = ink, FontWeight w = FontWeight.w400}) => TextStyle(fontFamily: body, fontSize: size, color: c, fontWeight: w);
   static TextStyle b(double size, [Color c = ink]) => t(size, c: c, w: FontWeight.w600);
 }
 
@@ -98,6 +99,7 @@ ThemeData buildTheme() {
       trackOutlineColor: WidgetStateProperty.all(Colors.transparent),
     ),
     progressIndicatorTheme: const ProgressIndicatorThemeData(color: L.das),
+    pageTransitionsTheme: PageTransitionsTheme(builders: {for (final p in TargetPlatform.values) p: const NeonPageTransitions()}),
   );
 }
 
@@ -148,7 +150,7 @@ class Panel extends StatelessWidget {
               ),
       ),
     );
-    return box;
+    return onTap == null ? box : Pressable(child: box);
   }
 }
 
@@ -230,20 +232,24 @@ class GlowButton extends StatelessWidget {
       label: text,
       onTap: onTap,
       excludeSemantics: true,
-      child: Container(
-        decoration: BoxDecoration(color: on ? color : L.line, borderRadius: BorderRadius.circular(12), boxShadow: on ? L.glow(color, 14, .55) : null),
-        child: Material(
-          type: MaterialType.transparency,
-          child: InkWell(
-            borderRadius: BorderRadius.circular(12),
-            onTap: onTap,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              child: Center(
-                child: Text(
-                  text.toUpperCase(),
-                  textAlign: TextAlign.center,
-                  style: L.h(size, on ? (textColor ?? Colors.white) : L.muted).copyWith(letterSpacing: 1.2),
+      child: Pressable(
+        enabled: on,
+        child: AnimatedContainer(
+          duration: Fx.d(220),
+          decoration: BoxDecoration(color: on ? color : L.line, borderRadius: BorderRadius.circular(12), boxShadow: on ? L.glow(color, 14, .55) : null),
+          child: Material(
+            type: MaterialType.transparency,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(12),
+              onTap: onTap,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                child: Center(
+                  child: Text(
+                    text.toUpperCase(),
+                    textAlign: TextAlign.center,
+                    style: L.h(size, on ? (textColor ?? Colors.white) : L.muted).copyWith(letterSpacing: 1.2),
+                  ),
                 ),
               ),
             ),
@@ -270,26 +276,29 @@ class GhostButton extends StatelessWidget {
       label: text,
       onTap: onTap,
       excludeSemantics: true,
-      child: Material(
-        color: c.withValues(alpha: .1),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-          side: BorderSide(color: c.withValues(alpha: .6)),
-        ),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(12),
-          onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                if (icon != null) ...[Icon(icon, size: 18, color: c), const SizedBox(width: 6)],
-                Flexible(
-                  child: Text(text, textAlign: TextAlign.center, style: L.b(13, c == L.muted ? L.ink2 : c)),
-                ),
-              ],
+      child: Pressable(
+        enabled: onTap != null,
+        child: Material(
+          color: c.withValues(alpha: .1),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+            side: BorderSide(color: c.withValues(alpha: .6)),
+          ),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(12),
+            onTap: onTap,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  if (icon != null) ...[Icon(icon, size: 18, color: c), const SizedBox(width: 6)],
+                  Flexible(
+                    child: Text(text, textAlign: TextAlign.center, style: L.b(13, c == L.muted ? L.ink2 : c)),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -352,10 +361,16 @@ class Bar extends StatelessWidget {
     height: height,
     decoration: BoxDecoration(color: L.line, borderRadius: BorderRadius.circular(99)),
     alignment: Alignment.centerLeft,
-    child: FractionallySizedBox(
-      widthFactor: value.clamp(0, 1).toDouble(),
-      child: Container(
-        decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(99), boxShadow: value > 0 ? L.glow(color, 6, .8) : null),
+    // Fills up from where it was (from zero on first show).
+    child: TweenAnimationBuilder<double>(
+      tween: Tween(end: value.clamp(0, 1).toDouble()),
+      duration: Fx.d(700),
+      curve: Curves.easeOutCubic,
+      builder: (_, v, _) => FractionallySizedBox(
+        widthFactor: v,
+        child: Container(
+          decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(99), boxShadow: v > 0 ? L.glow(color, 6, .8) : null),
+        ),
       ),
     ),
   );

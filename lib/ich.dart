@@ -8,6 +8,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
 import 'firebase_options.dart';
+import 'fx.dart';
 import 'groups.dart';
 import 'heute.dart';
 import 'i18n.dart';
@@ -125,7 +126,10 @@ class _IchScreenState extends State<IchScreen> {
                     ),
                     InkWell(
                       onTap: _editNick,
-                      child: Text('${s.groupName.isEmpty ? courseName : s.groupName} · ${l('Name ändern', 'Сменить имя', 'Change name')}', style: L.t(12, c: L.muted)),
+                      child: Text(
+                        '${s.groupName.isEmpty ? courseName : s.groupName} · ${l('Name ändern', 'Сменить имя', 'Change name')}',
+                        style: L.t(12, c: L.muted),
+                      ),
                     ),
                   ],
                 ),
@@ -283,6 +287,30 @@ class _IchScreenState extends State<IchScreen> {
                     onChanged: (v) {
                       p.voice = v;
                       p.save();
+                    },
+                  ),
+                ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 4, 8, 4),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(l('Animationen', 'Анимации', 'Animations'), style: L.t(14)),
+                        Text(l('Konfetti, Effekte, Übergänge', 'Конфетти, эффекты, переходы', 'Confetti, effects, transitions'), style: L.t(12, c: L.muted)),
+                      ],
+                    ),
+                  ),
+                  Switch(
+                    value: p.anim,
+                    onChanged: (v) {
+                      p.anim = v;
+                      p.save();
+                      if (v) confetti(context, count: 40);
                     },
                   ),
                 ],
@@ -482,11 +510,7 @@ class _IchScreenState extends State<IchScreen> {
             Text(l('Welches Kapitel macht der Kurs gerade?', 'Какую главу сейчас проходит курс?', 'Which chapter is the class on?'), style: L.h(22)),
             const SizedBox(height: 4),
             Text(
-              l(
-                'Alle sehen es auf „Heute“ und in „Lernen“.',
-                'Все увидят это на «Heute» и в «Lernen».',
-                'Everyone sees it on “Heute” and in “Lernen”.',
-              ),
+              l('Alle sehen es auf „Heute“ und in „Lernen“.', 'Все увидят это на «Heute» и в «Lernen».', 'Everyone sees it on “Heute” and in “Lernen”.'),
               style: L.t(12, c: L.muted),
             ),
             for (final lv in ['A1', 'A2']) ...[
