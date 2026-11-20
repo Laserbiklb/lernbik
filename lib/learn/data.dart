@@ -4,11 +4,21 @@ import 'package:flutter/services.dart' show rootBundle;
 
 /// A word card. [k] (article + word) is the progress key, as in Wortkreis.
 class Word {
-  final String a, d, r, c, p;
+  final String a, d, ru, c, p;
+  final String? en;
   final bool own;
   final int o; // order in the textbook
   late final String k = (a.isNotEmpty ? '$a ' : '') + d;
-  Word(this.a, this.d, this.r, this.c, {this.p = '', this.own = false, this.o = 1000000});
+  Word(this.a, this.d, this.ru, this.c, {this.p = '', this.en, this.own = false, this.o = 1000000});
+
+  /// The app language; set by the store. In German there is no built-in translation
+  /// (the games that need one are skipped and words get a Google Translate button).
+  static String lang = 'ru';
+
+  /// The translation in the app language: Russian, English, or none for German.
+  /// Own words keep what the user typed.
+  String get r => own ? ru : (lang == 'de' ? '' : (lang == 'en' ? (en ?? ru) : ru));
+  bool get hasTr => r.isNotEmpty;
 
   /// "A2 · 6" → "A2"
   String get level => RegExp(r'^(A[12]) · ').firstMatch(c)?.group(1) ?? '';
@@ -38,14 +48,22 @@ class Rule {
   String b(String lang) => _pick(body, lang);
 }
 
+/// A text in the app language (German, Russian, English), for the trainers' generated tasks.
+String tl(String de, String ru, String en) => Word.lang == 'de' ? de : (Word.lang == 'en' ? en : ru);
+
 String _pick(Map<String, String> m, String lang) => m[lang] ?? m['de'] ?? m['ru'] ?? m.values.first;
 
 class LearnData {
   final List<Word> words;
   final Map<String, List<Chapter>> book;
   final Map<String, List<String>> quiz;
-  final Map<String, dynamic> tr; // trainer data (cases, verbs, adjectives) from Wortkreis
-  LearnData(this.words, this.book, this.quiz, this.tr);
+
+  /// Trainer data (cases, verbs, adjectives) from Wortkreis, per language: ru (original), de, en.
+  final Map<String, Map<String, dynamic>> trs;
+  LearnData(this.words, this.book, this.quiz, this.trs);
+
+  /// Trainer data in the app language.
+  Map<String, dynamic> get tr => trs[Word.lang] ?? trs['ru']!;
 
   static LearnData? _i;
   static LearnData get i => _i!;
@@ -54,10 +72,11 @@ class LearnData {
   static Future<LearnData> load() async {
     if (_i != null) return _i!;
     final w = jsonDecode(await rootBundle.loadString('assets/learn/words.json')) as List;
+    final en = (jsonDecode(await rootBundle.loadString('assets/learn/words_en.json')) as Map).cast<String, String>();
     final words = <Word>[];
     for (var i = 0; i < w.length; i++) {
       final x = (w[i] as List).cast<String>();
-      words.add(Word(x[0], x[1], x[2], x[3], p: x.length > 4 ? x[4] : '', o: i));
+      words.add(Word(x[0], x[1], x[2], x[3], p: x.length > 4 ? x[4] : '', en: en['${x[0]} ${x[1]}'.trim()], o: i));
     }
     final b = jsonDecode(await rootBundle.loadString('assets/learn/book.json')) as Map<String, dynamic>;
     final book = <String, List<Chapter>>{};
@@ -81,8 +100,11 @@ class LearnData {
     }
     final q = jsonDecode(await rootBundle.loadString('assets/learn/quiz.json')) as Map<String, dynamic>;
     final quiz = {for (final e in q.entries) e.key: (e.value as List).cast<String>()};
-    final tr = jsonDecode(await rootBundle.loadString('assets/learn/trainers.json')) as Map<String, dynamic>;
-    return _i = LearnData(words, book, quiz, tr);
+    final trs = {
+      for (final (l, f) in [('ru', 'trainers'), ('de', 'trainers_de'), ('en', 'trainers_en')])
+        l: jsonDecode(await rootBundle.loadString('assets/learn/$f.json')) as Map<String, dynamic>,
+    };
+    return _i = LearnData(words, book, quiz, trs);
   }
 
   Chapter? chapter(String lv, int n) {

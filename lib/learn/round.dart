@@ -126,7 +126,9 @@ class _RoundScreenState extends State<RoundScreen> {
       for (final w in b)
         if (p.prog[w.k] == null) w.k,
     };
-    stages = ['wahl', 'paare', 'artikel', voice && rnd.nextBool() ? 'hoeren' : 'rueck', 'buchstaben', 'tippen'];
+    // In German there is no built-in translation: the translation games are skipped and the
+    // letter/typing games are prompted by ear.
+    stages = noTr ? ['artikel', 'buchstaben', 'tippen'] : ['wahl', 'paare', 'artikel', voice && rnd.nextBool() ? 'hoeren' : 'rueck', 'buchstaben', 'tippen'];
     si = -1;
     missed.clear();
     seen.clear();
@@ -149,8 +151,40 @@ class _RoundScreenState extends State<RoundScreen> {
     return g == null || g.b < 2 ? 'learn' : 'known';
   }
 
+  bool get noTr => Word.lang == 'de';
+
+  /// What the letter/typing games show: the translation, or (German UI) nothing because the
+  /// word is spoken, or the English one when the device cannot speak.
+  String? _cue(Word w) => w.hasTr ? w.r : (Tts.available ? null : (w.en ?? w.ru));
+
+  Widget _ask(Word w, String sub, {Color? subColor}) {
+    final cue = _cue(w);
+    if (cue != null) return Ask(cue, sub, subColor: subColor);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 18),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(l('Hör zu', 'Послушайте', 'Listen'), style: L.h(30)),
+          const SizedBox(height: 4),
+          Text(sub, style: L.b(13, subColor ?? L.muted)),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              GhostButton(l('▶ Noch einmal', '▶ Ещё раз', '▶ Again'), onTap: () => Tts.say(say(w))),
+              GhostButton(l('Übersetzen', 'Перевести', 'Translate'), color: L.muted, onTap: () => openGoogle(say(w))),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
   bool _elig(String g, Word w) {
     final lv = _level(w);
+    if (noTr && g == 'buchstaben') return lv != 'known';
     return switch (g) {
       'wahl' || 'paare' => lv != 'known',
       'artikel' => true,
@@ -240,6 +274,7 @@ class _RoundScreenState extends State<RoundScreen> {
     } else if (g == 'artikel') {
       if (voice) Tts.say(w.d);
     } else if (g == 'buchstaben') {
+      if (_cue(w) == null) Tts.say(say(w));
       final bd = bareD(w);
       lChars = bd.split('');
       lPool = List.generate(lChars.length, (i) => i);
@@ -250,6 +285,7 @@ class _RoundScreenState extends State<RoundScreen> {
       } while (n < 8 && lPool.map((i) => lChars[i]).join() == bd);
       lPick = [];
     } else if (g == 'tippen') {
+      if (_cue(w) == null) Tts.say(say(w));
       typeC.clear();
       WidgetsBinding.instance.addPostFrameCallback((_) => typeF.requestFocus());
     }
@@ -484,7 +520,11 @@ class _RoundScreenState extends State<RoundScreen> {
 
   static double _fs(Word w) {
     final n = w.d.length + w.a.length;
-    return n > 22 ? 24 : n > 14 ? 30 : 36;
+    return n > 22
+        ? 24
+        : n > 14
+        ? 30
+        : 36;
   }
 
   static Color _artDark(String a) => a == 'der'
@@ -498,7 +538,7 @@ class _RoundScreenState extends State<RoundScreen> {
     final g = stages[si];
     final kids = <Widget>[];
     if (g == 'artikel') {
-      kids.add(_sign(w, article: false, sub: w.r));
+      kids.add(_sign(w, article: false, sub: w.hasTr ? w.r : null));
       for (final a in ['der', 'die', 'das']) {
         final good = locked && a == w.a, bad = locked && picked == ['der', 'die', 'das'].indexOf(a) && a != w.a;
         kids.add(
@@ -571,20 +611,14 @@ class _RoundScreenState extends State<RoundScreen> {
     } else if (g == 'buchstaben') {
       final v0 = variants(w).first;
       kids.add(
-        Ask(
-          w.r,
-          v0.$1.isNotEmpty
-              ? '${l('Artikel', 'артикль', 'article')}: ${v0.$1}'
-              : l('Wort aus Buchstaben bauen', 'соберите слово из букв', 'build the word'),
+        _ask(
+          w,
+          v0.$1.isNotEmpty ? '${l('Artikel', 'артикль', 'article')}: ${v0.$1}' : l('Wort aus Buchstaben bauen', 'соберите слово из букв', 'build the word'),
           subColor: v0.$1.isNotEmpty ? L.art(v0.$1) : null,
         ),
       );
       kids.add(
-        TokenLine(
-          tokens: [for (final i in lPick) lChars[i]],
-          placeholder: true,
-          onTap: locked ? null : (j) => setState(() => lPool.add(lPick.removeAt(j))),
-        ),
+        TokenLine(tokens: [for (final i in lPick) lChars[i]], placeholder: true, onTap: locked ? null : (j) => setState(() => lPool.add(lPick.removeAt(j)))),
       );
       kids.add(const SizedBox(height: 12));
       kids.add(
@@ -600,8 +634,8 @@ class _RoundScreenState extends State<RoundScreen> {
       );
     } else {
       kids.add(
-        Ask(
-          w.r,
+        _ask(
+          w,
           w.a.isNotEmpty
               ? l('Nomen: mit Artikel schreiben', 'существительное, пишите с артиклем', 'noun: write it with the article') +
                     (variants(w).length > 1 ? ' · ${l('eine Form reicht', 'достаточно одной формы', 'one form is enough')}' : '')
@@ -654,7 +688,7 @@ class _RoundScreenState extends State<RoundScreen> {
               text: w.d,
               style: const TextStyle(fontWeight: FontWeight.w700),
             ),
-            TextSpan(text: ' — ${w.r}'),
+            if (w.hasTr) TextSpan(text: ' — ${w.r}'),
           ],
         ),
         onNext: wait ? () => setState(_nextQ) : null,
@@ -713,11 +747,7 @@ class _RoundScreenState extends State<RoundScreen> {
           ),
         const SizedBox(height: 6),
         Text(
-          l(
-            'Tippe ein deutsches Wort, dann seine Übersetzung.',
-            'Нажмите немецкое слово, затем его перевод.',
-            'Tap a German word, then its translation.',
-          ),
+          l('Tippe ein deutsches Wort, dann seine Übersetzung.', 'Нажмите немецкое слово, затем его перевод.', 'Tap a German word, then its translation.'),
           style: L.t(13, c: L.muted),
         ),
       ],
@@ -774,7 +804,7 @@ class _RoundScreenState extends State<RoundScreen> {
                                     ],
                                   ),
                                 ),
-                                Text(w.r, style: L.t(13, c: L.ink2)),
+                                if (w.hasTr) Text(w.r, style: L.t(13, c: L.ink2)),
                               ],
                             ),
                           ),
@@ -819,18 +849,11 @@ class _RoundScreenState extends State<RoundScreen> {
       children: [
         Text(l('RUNDE GESCHAFFT', 'КРУГ ПРОЙДЕН', 'ROUND DONE'), style: L.h(14, L.muted).copyWith(letterSpacing: 1.6)),
         const SizedBox(height: 8),
-        if (results.isNotEmpty)
-          Text('$clean ${l('von', 'из', 'of')} ${results.length} ${l('ohne Fehler', 'без ошибок', 'without mistakes')}', style: L.h(30)),
+        if (results.isNotEmpty) Text('$clean ${l('von', 'из', 'of')} ${results.length} ${l('ohne Fehler', 'без ошибок', 'without mistakes')}', style: L.h(30)),
         if (results.isEmpty)
-          Text(
-            l('In dieser Auswahl gab es keine Nomen.', 'В этой подборке нет существительных.', 'There were no nouns in this set.'),
-            style: L.t(15),
-          ),
+          Text(l('In dieser Auswahl gab es keine Nomen.', 'В этой подборке нет существительных.', 'There were no nouns in this set.'), style: L.t(15)),
         const SizedBox(height: 6),
-        Text(
-          '+${right + bonus} XP${bonus > 0 ? ' (${l('Bonus für Serien', 'бонус за серии', 'streak bonus')}: +$bonus)' : ''}',
-          style: L.b(15, L.sign),
-        ),
+        Text('+${right + bonus} XP${bonus > 0 ? ' (${l('Bonus für Serien', 'бонус за серии', 'streak bonus')}: +$bonus)' : ''}', style: L.b(15, L.sign)),
         const SizedBox(height: 8),
         Text(
           l(

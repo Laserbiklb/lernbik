@@ -8,7 +8,7 @@ import 'progress.dart' show shuffled;
 
 Map<String, dynamic> get _aj => LearnData.i.tr['AJ'] as Map<String, dynamic>;
 T _pick<T>(Random r, List<T> a) => a[r.nextInt(a.length)];
-const _ajg = {'m': 'm', 'f': 'f', 'n': 'n', 'p': 'мн.'};
+Map<String, String> get _ajg => {'m': 'm', 'f': 'f', 'n': 'n', 'p': tl('Pl.', 'мн.', 'pl.')};
 const _ajc = {'nom': 'Nominativ', 'akk': 'Akkusativ', 'dat': 'Dativ'};
 
 String _poss(Random r, String art, String kind) {
@@ -67,6 +67,7 @@ Task adjTask(Random r, String kind) {
     form = cap(form);
     opts = opts.map(cap).toList();
   }
-  final why = '${_ajc[cs]}, ${_ajg[g]}${art.isNotEmpty ? ', после «$art»' : ', без артикля'} → -$end';
+  final why =
+      '${_ajc[cs]}, ${_ajg[g]}${art.isNotEmpty ? ', ${tl('nach', 'после', 'after')} «$art»' : ', ${tl('ohne Artikel', 'без артикля', 'no article')}'} → -$end';
   return Task.gap('$t ($adj)', form, opts, why, full: t.replaceFirst('___', form));
 }

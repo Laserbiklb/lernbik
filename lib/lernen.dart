@@ -108,8 +108,7 @@ class LernenScreen extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          '${c.lv} · ${l('Kapitel', 'Глава', 'Chapter')} ${c.n}${isCourse ? ' · ${l('im Kurs', 'на курсе', 'in class')}' : ''}'
-                              .toUpperCase(),
+                          '${c.lv} · ${l('Kapitel', 'Глава', 'Chapter')} ${c.n}${isCourse ? ' · ${l('im Kurs', 'на курсе', 'in class')}' : ''}'.toUpperCase(),
                           style: L.b(11, isCourse ? L.derSoft : L.muted).copyWith(letterSpacing: .8),
                         ),
                         const SizedBox(height: 2),
@@ -154,10 +153,7 @@ class LernenScreen extends StatelessWidget {
               Row(
                 children: [
                   Expanded(
-                    child: GlowButton(
-                      l('Wörter lernen', 'Учить слова', 'Learn words'),
-                      onTap: ws.isEmpty ? null : () => startWords(context, s, ws, 'new'),
-                    ),
+                    child: GlowButton(l('Wörter lernen', 'Учить слова', 'Learn words'), onTap: ws.isEmpty ? null : () => startWords(context, s, ws, 'new')),
                   ),
                   const SizedBox(width: 8),
                   GhostButton(
@@ -481,8 +477,7 @@ class _AllRulesScreenState extends State<AllRulesScreen> {
   Widget build(BuildContext context) {
     final l = (String de, String ru, String en) => _l(s, de, ru, en);
     final qq = q.trim().toLowerCase();
-    bool hit(Rule r) =>
-        qq.isEmpty || r.t(s.lang).toLowerCase().contains(qq) || r.ex.toLowerCase().contains(qq) || r.b(s.lang).toLowerCase().contains(qq);
+    bool hit(Rule r) => qq.isEmpty || r.t(s.lang).toLowerCase().contains(qq) || r.ex.toLowerCase().contains(qq) || r.b(s.lang).toLowerCase().contains(qq);
     final chs = qq.isEmpty ? LearnData.i.book[lv]! : [...LearnData.i.book['A1']!, ...LearnData.i.book['A2']!];
     return ListenableBuilder(
       listenable: s.learn,
@@ -631,7 +626,7 @@ class _DictScreenState extends State<DictScreen> {
                                   ],
                                 ),
                               ),
-                              Text('${w.r} · ${w.c}', style: L.t(12, c: L.muted)),
+                              Text(w.hasTr ? '${w.r} · ${w.c}' : w.c, style: L.t(12, c: L.muted)),
                             ],
                           ),
                         ),
@@ -776,12 +771,8 @@ class _DictScreenState extends State<DictScreen> {
 String aiPrompt(String lang) => [
   'Ich lerne Deutsch (A2–B1). Schreib mir eine Wortliste zum Thema: <THEMA>.',
   'Format: eine Zeile pro Wort, „Wort — Übersetzung“. Nomen immer mit Artikel (der/die/das). 15–25 Wörter, nur die Liste, kein anderer Text.',
-  'Übersetzung auf ${lang == 'ru'
-      ? 'Russisch'
-      : lang == 'en'
-      ? 'Englisch'
-      : 'Russisch'}.',
+  'Übersetzung auf ${lang == 'en' ? 'Englisch' : (lang == 'ru' ? 'Russisch' : '<SPRACHE>')}.',
   'Beispiel:',
-  'der Tisch — стол',
-  'abholen — забирать',
+  lang == 'en' ? 'der Tisch — table' : 'der Tisch — стол',
+  lang == 'en' ? 'abholen — to pick up' : 'abholen — забирать',
 ].join('\n');

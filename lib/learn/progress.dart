@@ -59,7 +59,7 @@ class Progress extends ChangeNotifier {
     'day': day,
     'ts': ts,
     'own': [
-      for (final w in own) [w.a, w.d, w.r, w.c],
+      for (final w in own) [w.a, w.d, w.ru, w.c],
     ],
     'rclean': rclean,
     'rdue': rdue,
@@ -92,8 +92,7 @@ class Progress extends ChangeNotifier {
     best = ints('best');
     tstat = {
       for (final e in (o['tstat'] as Map? ?? {}).entries)
-        if (e.value is List && (e.value as List).length == 2)
-          e.key as String: [((e.value as List)[0] as num).toInt(), ((e.value as List)[1] as num).toInt()],
+        if (e.value is List && (e.value as List).length == 2) e.key as String: [((e.value as List)[0] as num).toInt(), ((e.value as List)[1] as num).toInt()],
     };
     rsize = [6, 12, 20].contains(o['rsize']) ? o['rsize'] as int : 12;
     voice = o['voice'] != false;

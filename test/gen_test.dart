@@ -47,12 +47,31 @@ void main() {
       // ignore: avoid_print
       print('${e.key}: ${t.text}${t.words.join(' ')} → ${t.answer}${t.answers.join('/')} | ${t.options.join(', ')} | ${t.why}');
     }
-    for (final e in topicGens.entries) {
-      for (var i = 0; i < 400; i++) {
-        final t = e.value.first(r, 'ru');
-        check(t, e.key);
+    final cyr = RegExp('[а-яА-ЯёЁ]');
+    for (final lang in ['ru', 'de', 'en']) {
+      Word.lang = lang;
+      for (final e in topicGens.entries) {
+        for (var i = 0; i < 400; i++) {
+          final t = e.value.first(r, lang);
+          check(t, '${e.key} $lang');
+          if (lang != 'ru') {
+            final all = [t.text, t.html, t.cue, t.why, t.an, t.exv, ...t.options, ...t.words, t.step?.hint ?? '', t.step?.explain ?? ''].join(' | ');
+            expect(cyr.hasMatch(all), isFalse, reason: '${e.key} $lang: $all');
+          }
+        }
+        if (lang != 'ru') {
+          final sh = topicSheet(e.key);
+          expect(cyr.hasMatch(sh), isFalse, reason: 'sheet ${e.key} $lang');
+        }
+      }
+      // ignore: avoid_print
+      for (final k in ['cases:chunk', 'verbs:pol', 'verbs:prep', 'verbs:refl', 'verbs:gift', 'verbs:zweck']) {
+        final t = topicGens[k]!.first(r, lang);
+        // ignore: avoid_print
+        print('$lang $k: ${t.cue} | ${t.text}${t.html} → ${t.answer}${t.answers.join('/')} | ${t.why}');
       }
     }
+    Word.lang = 'ru';
     for (final id in caseLessons) {
       final used = <String>{};
       for (var i = 0; i < 300; i++) {

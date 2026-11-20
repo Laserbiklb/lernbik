@@ -22,7 +22,8 @@ Die alte Wortkreis-Seite (`wortkreis/wortkreis.html`) bleibt unter `/wortkreis/`
 ### Lerninhalte
 
 - `assets/learn/*.json` kommen aus Wortkreis: `node tools/extract/extract.cjs wortkreis.html wk.json assets/learn/trainers.json`,
-  dann `node tools/extract/build_assets.cjs wk.json assets/learn` und **danach** `python3 tools/i18n/build.py` (deutsche und englische Regeltexte).
+  dann `node tools/extract/build_assets.cjs wk.json assets/learn` und **danach** `python3 tools/i18n/build.py` (deutsche und englische Regeltexte, englische Wortübersetzungen) sowie `python3 tools/i18n/trainers_build.py` (Trainer-Texte auf Deutsch und Englisch).
+  Auf Deutsch gibt es keine eingebaute Wortübersetzung: Übersetzungsspiele fallen weg, Buchstaben und Tippen laufen über das Hören, dazu ein Google-Übersetzer-Knopf.
 - Aufgaben-Generatoren: `lib/learn/gen_rules.dart` (Regeln), `gen_cases.dart`, `gen_verbs.dart`, `gen_adj.dart` (Trainer). Test: `flutter test`.
 - Die Überschriften-Schrift Rajdhani lädt `tools/fonts.sh` (im CI automatisch).
 

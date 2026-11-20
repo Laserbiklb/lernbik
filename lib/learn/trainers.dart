@@ -68,11 +68,7 @@ const trainers = [
       Topic(
         'cases:pron',
         ('Pronomen: mich · mir', 'Местоимения: mich · mir', 'Pronouns: mich · mir'),
-        (
-          'Das Verb entscheidet: wen? → mich, wem? → mir.',
-          'Глагол решает: кого? → mich, кому? → mir.',
-          'The verb decides: whom? → mich, to whom? → mir.',
-        ),
+        ('Das Verb entscheidet: wen? → mich, wem? → mir.', 'Глагол решает: кого? → mich, кому? → mir.', 'The verb decides: whom? → mich, to whom? → mir.'),
       ),
       Topic(
         'cases:pakk',
@@ -111,11 +107,7 @@ const trainers = [
       Topic(
         'cases:mix',
         ('Alles gemischt', 'Микс всего', 'Everything mixed'),
-        (
-          'Alles zusammen: zuerst der Fall, dann die Form.',
-          'Всё вместе: сначала падеж, потом форма.',
-          'All together: first the case, then the form.',
-        ),
+        ('Alles zusammen: zuerst der Fall, dann die Form.', 'Всё вместе: сначала падеж, потом форма.', 'All together: first the case, then the form.'),
       ),
     ],
   ),
@@ -174,11 +166,7 @@ const trainers = [
       Topic(
         'verbs:da',
         ('darauf · mit ihr', 'darauf · mit ihr', 'darauf · mit ihr'),
-        (
-          'Kurz antworten: Ja, ich denke daran / an ihn.',
-          'Короткий ответ: Ja, ich denke daran / an ihn.',
-          'Short answer: Ja, ich denke daran / an ihn.',
-        ),
+        ('Kurz antworten: Ja, ich denke daran / an ihn.', 'Короткий ответ: Ja, ich denke daran / an ihn.', 'Short answer: Ja, ich denke daran / an ihn.'),
       ),
       Topic(
         'verbs:ord',
@@ -273,7 +261,7 @@ Trainer? trainerFor(String id) {
   return null;
 }
 
-/// Explanation sheet for a topic (Wortkreis texts, Russian for now).
+/// Explanation sheet for a topic (Wortkreis texts in the app language).
 String topicSheet(String topic) {
   final d = LearnData.i.tr;
   final p = topic.split(':');
@@ -281,11 +269,12 @@ String topicSheet(String topic) {
   if (p[0] == 'verbs') return ((d['SHEET'] as Map)[p[1]] ?? '') as String;
   final t = d['AJT'] as Map;
   return switch (p[1]) {
-    'd' => '${t['d']}<p><b>-e</b> только в 5 местах: Nominativ ед. ч. и Akkusativ f, n. Везде остальное — <b>-en</b>.</p>',
+    'd' =>
+      '${t['d']}<p>${tl('<b>-e</b> nur an 5 Stellen: Nominativ Singular und Akkusativ f, n. Überall sonst — <b>-en</b>.', '<b>-e</b> только в 5 местах: Nominativ ед. ч. и Akkusativ f, n. Везде остальное — <b>-en</b>.', '<b>-e</b> in only 5 places: Nominativ singular and Akkusativ f, n. Everywhere else — <b>-en</b>.')}</p>',
     'i' =>
-      '${t['i']}<p>Где у артикля нет окончания (<i>ein</i> Mantel, <i>ein</i> Hemd), прилагательное берёт окончание от der/das: ein neu<b>er</b> Mantel, ein neu<b>es</b> Hemd. В Dativ и мн. ч. — всегда <b>-en</b>.</p>',
+      '${t['i']}<p>${tl('Wo der Artikel keine Endung hat (<i>ein</i> Mantel, <i>ein</i> Hemd), nimmt das Adjektiv die Endung von der/das: ein neu<b>er</b> Mantel, ein neu<b>es</b> Hemd. Im Dativ und Plural — immer <b>-en</b>.', 'Где у артикля нет окончания (<i>ein</i> Mantel, <i>ein</i> Hemd), прилагательное берёт окончание от der/das: ein neu<b>er</b> Mantel, ein neu<b>es</b> Hemd. В Dativ и мн. ч. — всегда <b>-en</b>.', 'Where the article has no ending (<i>ein</i> Mantel, <i>ein</i> Hemd), the adjective takes the ending of der/das: ein neu<b>er</b> Mantel, ein neu<b>es</b> Hemd. In the Dativ and plural — always <b>-en</b>.')}</p>',
     'z' =>
-      '${t['z']}<p>Артикля нет, поэтому прилагательное берёт его окончание: d<b>er</b> → frisch<b>er</b> Kaffee, d<b>em</b> → mit frisch<b>em</b> Brot.</p>',
+      '${t['z']}<p>${tl('Es gibt keinen Artikel, also nimmt das Adjektiv seine Endung: d<b>er</b> → frisch<b>er</b> Kaffee, d<b>em</b> → mit frisch<b>em</b> Brot.', 'Артикля нет, поэтому прилагательное берёт его окончание: d<b>er</b> → frisch<b>er</b> Kaffee, d<b>em</b> → mit frisch<b>em</b> Brot.', 'There is no article, so the adjective takes its ending: d<b>er</b> → frisch<b>er</b> Kaffee, d<b>em</b> → mit frisch<b>em</b> Brot.')}</p>',
     _ => '${t['d']}${t['i']}',
   };
 }

@@ -7,6 +7,7 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'firebase_options.dart';
+import 'learn/data.dart';
 import 'learn/progress.dart';
 
 /// The course group. Everyone who opens Lernbik lands here.
@@ -69,10 +70,7 @@ class Hw {
 class News {
   final String id, text, by;
   final DateTime? created;
-  News(this.id, Map<String, dynamic> d)
-    : text = (d['text'] ?? '') as String,
-      by = (d['by'] ?? '') as String,
-      created = (d['created'] as Timestamp?)?.toDate();
+  News(this.id, Map<String, dynamic> d) : text = (d['text'] ?? '') as String, by = (d['by'] ?? '') as String, created = (d['created'] as Timestamp?)?.toDate();
 }
 
 class Member {
@@ -127,6 +125,7 @@ class AppState extends ChangeNotifier {
   Future<void> init() async {
     prefs = await SharedPreferences.getInstance();
     lang = prefs.getString('lang') ?? _deviceLang();
+    Word.lang = lang;
     key = prefs.getString('key') ?? '';
     if (!useEmulator && FirebaseAuth.instance.currentUser == null) {
       await FirebaseAuth.instance.signInAnonymously();
@@ -152,6 +151,7 @@ class AppState extends ChangeNotifier {
 
   void setLang(String l) {
     lang = l;
+    Word.lang = l;
     prefs.setString('lang', l);
     if (key.isNotEmpty) userDoc.set({'lang': l}, SetOptions(merge: true));
     notifyListeners();
