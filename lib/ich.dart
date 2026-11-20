@@ -184,9 +184,9 @@ class _IchScreenState extends State<IchScreen> {
         ),
         Text(
           l(
-            'Wörter = sicher gelernt (Stufe 2+). Regeln = 5 Runden ohne Fehler.',
-            'Слова = выучены уверенно (уровень 2+). Правила = 5 заходов без ошибок.',
-            'Words = learned well (level 2+). Rules = 5 runs without mistakes.',
+            'Wörter und Regeln zählen ab Stufe 2 („kann“).',
+            'Слова и правила считаются с уровня 2 («знаю»).',
+            'Words and rules count from level 2 (“know”).',
           ),
           style: L.t(11, c: L.muted),
         ),

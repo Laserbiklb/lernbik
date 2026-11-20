@@ -1,7 +1,6 @@
 import 'package:flutter/services.dart';
 import 'package:material_ui/material_ui.dart';
 
-import 'fx.dart';
 import 'i18n.dart';
 import 'learn/data.dart';
 import 'learn/exercise.dart';
@@ -168,6 +167,13 @@ class LernenScreen extends StatelessWidget {
           ),
         ),
         SectionTitle('${l('Regeln', 'Правила', 'Rules')} · ${l('Kapitel', 'Глава', 'Chapter')} ${c.n}'),
+        if (dueRules(p).isNotEmpty)
+          GhostButton(
+            '${l('Regeln wiederholen', 'Повторить правила', 'Review rules')} · ${dueRules(p).length}',
+            icon: Icons.replay,
+            color: L.sign,
+            onTap: () => reviewRules(context, s),
+          ),
         if (c.rules.isEmpty)
           Text(l('In diesem Kapitel gibt es keine Regeln.', 'В этой главе нет правил.', 'No rules in this chapter.'), style: L.t(14, c: L.muted)),
         if (c.rules.isNotEmpty)
@@ -219,8 +225,8 @@ class RuleRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final p = s.learn;
-    final runs = p.rclean[r.id] ?? 0;
-    final done = runs >= runsToLearn;
+    final b = p.ruleBox(r.id);
+    final due = p.ruleDue(r.id);
     return InkWell(
       onTap: () => Navigator.push(
         context,
@@ -247,9 +253,21 @@ class RuleRow extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 8),
-            if (done) Pill('✓ ${_l(s, 'gelernt', 'выучено', 'learned')}', color: L.das),
-            if (!done && runs > 0) Text('$runs/$runsToLearn', style: L.b(12, L.sign)),
-            if (!done) const Icon(Icons.chevron_right, color: L.muted),
+            if (b >= 0) ...[
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  LevelDots(b),
+                  const SizedBox(height: 3),
+                  Text(
+                    due ? _l(s, 'wiederholen', 'повторить', 'review') : levelName(b, s.lang),
+                    style: L.b(11, due ? L.sign : (b >= ruleLearnedBox ? L.das : L.muted)),
+                  ),
+                ],
+              ),
+              const SizedBox(width: 4),
+            ],
+            const Icon(Icons.chevron_right, color: L.muted),
           ],
         ),
       ),
@@ -314,8 +332,6 @@ class RuleScreen extends StatelessWidget {
     return ListenableBuilder(
       listenable: s.learn,
       builder: (context, _) {
-        final runs = s.learn.rclean[r.id] ?? 0;
-        final done = runs >= runsToLearn;
         final can = hasTasks(r);
         return SubPage(
           title: '${c.lv} · ${l('Kapitel', 'Глава', 'Chapter')} ${c.n}',
@@ -346,20 +362,13 @@ class RuleScreen extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Row(
-                    children: [
-                      Expanded(child: Text(l('Runden ohne Fehler', 'Заходы без ошибок', 'Runs without mistakes'), style: L.b(13))),
-                      Text(done ? '✓ ${l('gelernt', 'выучено', 'learned')}' : '$runs / $runsToLearn', style: L.b(13, done ? L.das : L.sign)),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Bar(runs / runsToLearn, width: double.infinity, height: 6),
+                  RuleLevel(s: s, r: r),
                   const SizedBox(height: 8),
                   Text(
                     l(
-                      'Nach $runsToLearn Runden ohne Fehler gilt die Regel als gelernt. Ein Fehler setzt nichts zurück – die Runde zählt nur nicht.',
-                      'После $runsToLearn заходов без ошибок правило считается выученным. Ошибка ничего не обнуляет — просто заход не засчитывается.',
-                      'After $runsToLearn runs without mistakes the rule counts as learned. A mistake resets nothing – that run just does not count.',
+                      'Jede Runde ohne Fehler hebt die Regel eine Stufe: lerne → kann → sicher. Ab „kann“ gilt sie als gelernt. Danach kommt sie zur Wiederholung zurück – je höher die Stufe, desto später. Ein Fehler senkt nichts, die Regel kommt nur bald wieder.',
+                      'Каждый заход без ошибок поднимает правило на уровень: учу → знаю → закреплено. Начиная со «знаю» оно считается выученным. Потом правило возвращается на повторение — чем выше уровень, тем позже. Ошибка уровень не снижает, правило просто скоро вернётся.',
+                      'Every run without mistakes moves the rule up a level: learning → know → solid. From “know” on it counts as learned. Then it comes back for review – the higher the level, the later. A mistake lowers nothing, the rule just comes back soon.',
                     ),
                     style: L.t(12, c: L.muted),
                   ),
@@ -433,36 +442,23 @@ void practiseRule(BuildContext context, AppState s, Rule r) {
         p: s.learn,
         make: () => tasksForRule(r, s.lang),
         onDone: (clean, right, first, total) => s.learn.applyRuleRun(r.id, clean, right),
-        doneExtra: (ctx, clean, first, total) {
-          final runs = s.learn.rclean[r.id] ?? 0;
-          return Panel(
-            padding: const EdgeInsets.all(14),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Row(
-                  children: [
-                    Expanded(child: Text(l('Runden ohne Fehler', 'Заходы без ошибок', 'Runs without mistakes'), style: L.b(13))),
-                    if (runs >= runsToLearn)
-                      Appear(
-                        delay: 500,
-                        dy: 0,
-                        child: Breathe(
-                          color: L.das,
-                          radius: 99,
-                          child: Pill('✓ ${l('Thema gelernt', 'тема выучена', 'topic learned')}', color: L.das),
-                        ),
-                      )
-                    else
-                      Text('${runs.clamp(0, runsToLearn)} / $runsToLearn', style: L.b(13, L.sign)),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Bar(runs / runsToLearn, width: double.infinity, height: 6),
-              ],
-            ),
-          );
-        },
+        doneExtra: (ctx, clean, first, total) => Panel(
+          padding: const EdgeInsets.all(14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              RuleLevel(s: s, r: r),
+              const SizedBox(height: 8),
+              Text(
+                clean
+                    ? l('Ohne Fehler – eine Stufe höher.', 'Без ошибок — уровень выше.', 'No mistakes – one level up.')
+                    : l('Mit Fehler – die Stufe bleibt, die Regel kommt bald wieder.', 'С ошибкой — уровень тот же, правило скоро вернётся.',
+                        'With a mistake – the level stays, the rule comes back soon.'),
+                style: L.t(12, c: clean ? L.das : L.muted),
+              ),
+            ],
+          ),
+        ),
       ),
     ),
   );
@@ -787,3 +783,97 @@ String aiPrompt(String lang) => [
   lang == 'en' ? 'der Tisch — table' : 'der Tisch — стол',
   lang == 'en' ? 'abholen — to pick up' : 'abholen — забирать',
 ].join('\n');
+
+// ---------------- rule levels and review ----------------
+
+/// Level of a rule: dots, name, and "learned" once it reaches [ruleLearnedBox].
+class RuleLevel extends StatelessWidget {
+  final AppState s;
+  final Rule r;
+  const RuleLevel({super.key, required this.s, required this.r});
+  @override
+  Widget build(BuildContext context) {
+    final l = (String de, String ru, String en) => _l(s, de, ru, en);
+    final b = s.learn.ruleBox(r.id);
+    final done = b >= ruleLearnedBox;
+    return Row(
+      children: [
+        Expanded(child: Text(l('Stufe', 'Уровень', 'Level'), style: L.b(13))),
+        if (b < 0)
+          Text(l('neu', 'новое', 'new'), style: L.b(13, L.der))
+        else ...[
+          Text(levelName(b, s.lang), style: L.b(13, done ? L.das : L.sign)),
+          const SizedBox(width: 6),
+          LevelDots(b),
+          if (done) ...[const SizedBox(width: 8), Pill('✓ ${l('gelernt', 'выучено', 'learned')}', color: L.das)],
+        ],
+      ],
+    );
+  }
+}
+
+/// Rules waiting for review (all chapters), the longest overdue first.
+List<Rule> dueRules(Progress p) {
+  final out = [
+    for (final ch in LearnData.i.book.values)
+      for (final c in ch)
+        for (final r in c.rules)
+          if (p.ruleDue(r.id) && hasTasks(r)) r,
+  ];
+  out.sort((a, b) => p.rdue[a.id]!.compareTo(p.rdue[b.id]!));
+  return out;
+}
+
+/// A mixed review run: up to 3 due rules, 3 tasks each. Each rule moves a level on its own.
+void reviewRules(BuildContext context, AppState s) {
+  final l = (String de, String ru, String en) => _l(s, de, ru, en);
+  final owner = <Task, String>{};
+  var cleanByRule = <String, bool>{};
+  var picked = <Rule>[];
+  Navigator.push(
+    context,
+    MaterialPageRoute(
+      builder: (_) => ExerciseScreen(
+        title: l('Regeln wiederholen', 'Повторение правил', 'Rule review'),
+        lang: s.lang,
+        p: s.learn,
+        make: () {
+          owner.clear();
+          picked = dueRules(s.learn).take(3).toList();
+          final out = <Task>[];
+          for (final r in picked) {
+            for (final t in tasksForRule(r, s.lang, n: 3)) {
+              owner[t] = r.id;
+              out.add(t);
+            }
+          }
+          return out..shuffle();
+        },
+        onTasks: (all, missed) {
+          cleanByRule = {for (final r in picked) r.id: true};
+          for (final t in missed) {
+            final id = owner[t];
+            if (id != null) cleanByRule[id] = false;
+          }
+        },
+        onDone: (clean, right, first, total) => s.learn.applyRuleReview(cleanByRule, right),
+        doneExtra: (ctx, clean, first, total) => Panel(
+          child: Rows([
+            for (final r in picked)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(r.t(s.lang), style: L.b(14)),
+                    const SizedBox(height: 4),
+                    RuleLevel(s: s, r: r),
+                  ],
+                ),
+              ),
+          ]),
+        ),
+      ),
+    ),
+  );
+}

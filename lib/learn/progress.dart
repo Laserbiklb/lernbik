@@ -13,8 +13,19 @@ import 'data.dart';
 /// Review intervals by box (0 … 5), as in Wortkreis.
 const iv = [Duration.zero, Duration(hours: 4), Duration(days: 1), Duration(days: 3), Duration(days: 7), Duration(days: 21)];
 
-/// Clean runs a rule needs before it counts as learned.
-const runsToLearn = 5;
+/// A rule counts as learned from this level on (as words: box 2+ = known).
+const ruleLearnedBox = 2;
+
+/// Level name of a box (words and rules): 0–1 learning, 2–3 know, 4–5 solid.
+String levelName(int b, String lang) {
+  final i = b >= 4 ? 2 : (b >= 2 ? 1 : 0);
+  const names = {
+    'de': ['lerne', 'kann', 'sicher'],
+    'ru': ['учу', 'знаю', 'закреплено'],
+    'en': ['learning', 'know', 'solid'],
+  };
+  return (names[lang] ?? names['de']!)[i];
+}
 
 class Box {
   int b;
@@ -34,8 +45,8 @@ class Progress extends ChangeNotifier {
   int xp = 0, streak = 0, dn = 0, ts = 0;
   String day = '';
   List<Word> own = [];
-  Map<String, int> rclean = {}; // rule id → clean runs
-  Map<String, int> rdue = {}; // rule id → when to repeat (ms)
+  Map<String, int> rclean = {}; // rule id → level 0 … 5 (old data: clean runs, capped at 5)
+  Map<String, int> rdue = {}; // rule id → when to repeat (ms); set once a rule was practised
   Map<String, int> best = {}; // trainer records
   Map<String, List<int>> tstat = {}; // trainer topic → [answered, right at first try]
   int rsize = 12;
@@ -180,8 +191,12 @@ class Progress extends ChangeNotifier {
   // ---------- numbers ----------
   int box(Word w) => prog[w.k]?.b ?? -1;
   int get knownWords => allWords.where((w) => box(w) >= 2).length;
-  int get learnedRules => rclean.values.where((v) => v >= runsToLearn).length;
-  bool learned(String ruleId) => (rclean[ruleId] ?? 0) >= runsToLearn;
+  int get learnedRules => rclean.keys.where(learned).length;
+
+  /// Level of a rule (0 … 5), -1 when it was never practised.
+  int ruleBox(String ruleId) => rdue.containsKey(ruleId) || rclean.containsKey(ruleId) ? min(5, rclean[ruleId] ?? 0) : -1;
+  bool learned(String ruleId) => ruleBox(ruleId) >= ruleLearnedBox;
+  bool ruleDue(String ruleId) => rdue.containsKey(ruleId) && rdue[ruleId]! <= DateTime.now().millisecondsSinceEpoch;
 
   /// The streak only counts if the last learning day was today or yesterday.
   int get liveStreak {
@@ -290,11 +305,26 @@ class Progress extends ChangeNotifier {
   }
 
   // ---------- rules ----------
-  /// One run of a rule's exercises. Only error-free runs count; a mistake never resets the count.
+  /// One run of a rule's exercises, as words: a run without mistakes moves the rule up a level and
+  /// it comes back later (iv); a run with a mistake keeps the level and the rule is due again at once.
+  void _ruleRun(String ruleId, bool clean) {
+    final b0 = max(0, ruleBox(ruleId));
+    final b = clean ? min(5, b0 + 1) : b0;
+    rclean[ruleId] = b;
+    final now = DateTime.now().millisecondsSinceEpoch;
+    rdue[ruleId] = clean ? now + iv[b].inMilliseconds : now;
+  }
+
   void applyRuleRun(String ruleId, bool clean, int right) {
-    if (clean) rclean[ruleId] = (rclean[ruleId] ?? 0) + 1;
-    final c = min(rclean[ruleId] ?? 0, 5);
-    rdue[ruleId] = DateTime.now().add(iv[c]).millisecondsSinceEpoch;
+    _ruleRun(ruleId, clean);
+    xp += right;
+    touchDay();
+    save();
+  }
+
+  /// A review run over several rules: each rule moves on its own (clean = none of its tasks missed).
+  void applyRuleReview(Map<String, bool> cleanByRule, int right) {
+    cleanByRule.forEach(_ruleRun);
     xp += right;
     touchDay();
     save();

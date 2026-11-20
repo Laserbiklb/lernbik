@@ -119,7 +119,10 @@ class ExerciseScreen extends StatefulWidget {
   final Progress p;
   final void Function(bool clean, int right, int firstTry, int total)? onDone;
   final Widget Function(BuildContext context, bool clean, int firstTry, int total)? doneExtra;
-  const ExerciseScreen({super.key, required this.title, required this.make, required this.lang, required this.p, this.onDone, this.doneExtra});
+
+  /// Called with every task of the run and the ones missed at least once (before [onDone]).
+  final void Function(List<Task> all, List<Task> missed)? onTasks;
+  const ExerciseScreen({super.key, required this.title, required this.make, required this.lang, required this.p, this.onDone, this.doneExtra, this.onTasks});
   @override
   State<ExerciseScreen> createState() => _ExerciseScreenState();
 }
@@ -127,6 +130,7 @@ class ExerciseScreen extends StatefulWidget {
 class _ExerciseScreenState extends State<ExerciseScreen> {
   final rnd = Random();
   List<Task> queue = [];
+  List<Task> all = [];
   final miss = <Task>[];
   int total = 0, doneN = 0, right = 0;
   Task? cur;
@@ -169,6 +173,7 @@ class _ExerciseScreenState extends State<ExerciseScreen> {
   void _start() {
     runId++;
     queue = widget.make();
+    all = List.of(queue);
     total = queue.length;
     doneN = right = 0;
     miss.clear();
@@ -181,6 +186,7 @@ class _ExerciseScreenState extends State<ExerciseScreen> {
     if (queue.isEmpty) {
       cur = null;
       finished = true;
+      widget.onTasks?.call(all, List.of(miss));
       widget.onDone?.call(miss.isEmpty, right, total - miss.length, total);
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) confetti(context, count: miss.isEmpty ? 110 : 50);
