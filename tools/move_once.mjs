@@ -46,10 +46,51 @@ for (const g of groups) {
     }
     moved++;
   }
+  // Only the homework of the old course group comes along (same ids, so "done" ticks stay).
+  if (g.id === 'vhs-lueneburg') {
+    for (const h of (await g.ref.collection('hw').get()).docs) {
+      if (h.get('deleted') === true) continue;
+      await db.collection('groups').doc(target.id).collection('hw').doc(h.id).set(h.data());
+      console.log('  task copied:', String(h.get('text') || '').slice(0, 40));
+    }
+  }
   const us = await db.collection('users').where('gid', '==', g.id).get();
   for (const u of us.docs) await u.ref.update({ gid: target.id });
   console.log(`  users switched: ${us.size}`);
   await db.recursiveDelete(g.ref);
   console.log('  deleted');
+}
+
+// Same name twice → one entry: keep the member whose account was seen last, with the best stats.
+const users = (await db.collection('users').get()).docs;
+const seenOf = new Map();
+for (const u of users) {
+  const m = u.get('mid');
+  if (!m) continue;
+  const t = u.get('seen')?.toMillis?.() ?? 0;
+  seenOf.set(m, Math.max(seenOf.get(m) ?? -1, t));
+}
+const all = (await tm.get()).docs;
+const byNick = new Map();
+for (const m of all) {
+  const k = String(m.get('nick') || '').trim().toLowerCase();
+  if (!k) continue;
+  byNick.set(k, [...(byNick.get(k) || []), m]);
+}
+let owner = null;
+for (const [k, ms] of byNick) {
+  ms.sort((a, b) => (seenOf.get(b.id) ?? -1) - (seenOf.get(a.id) ?? -1));
+  const keep = ms[0];
+  if (k === 'laserbik') owner = keep;
+  if (ms.length < 2) continue;
+  const best = (f) => Math.max(...ms.map((m) => num(m.get(f))));
+  console.log(`duplicate "${keep.get('nick')}": ${ms.length} → 1 (words ${best('words')}, xp ${best('xp')})`);
+  if (!apply) continue;
+  await keep.ref.set({ words: best('words'), topics: best('topics'), xp: best('xp'), streak: best('streak') }, { merge: true });
+  for (const m of ms.slice(1)) await m.ref.delete();
+}
+if (owner) {
+  console.log(`admin of "${target.get('name')}": ${owner.get('nick')}`);
+  if (apply) await target.ref.set({ ownerMid: owner.id, ownerNick: owner.get('nick') }, { merge: true });
 }
 console.log(apply ? `\nDone, members moved: ${moved}` : '\nDry run only (MODE=apply to do it).');
