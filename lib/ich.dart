@@ -8,6 +8,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
 import 'firebase_options.dart';
+import 'groups.dart';
 import 'heute.dart';
 import 'i18n.dart';
 import 'learn/data.dart';
@@ -45,11 +46,12 @@ Future<bool> updateAvailable() async {
   }
 }
 
-String inviteLink() => '$siteUrl/';
+/// Link that opens Lernbik with the group preselected.
+String inviteLink(AppState s) => s.gid.isEmpty ? '$siteUrl/' : '$siteUrl/?g=${s.gid}';
 
 Future<void> shareApp(AppState s) async {
-  final text = '${tr(s.lang, 'shareText')} ${inviteLink()}';
-  await Clipboard.setData(ClipboardData(text: inviteLink()));
+  final text = '${tr(s.lang, 'shareText')} ${inviteLink(s)}';
+  await Clipboard.setData(ClipboardData(text: inviteLink(s)));
   openUrl('https://wa.me/?text=${Uri.encodeComponent(text)}');
 }
 
@@ -123,7 +125,7 @@ class _IchScreenState extends State<IchScreen> {
                     ),
                     InkWell(
                       onTap: _editNick,
-                      child: Text('$courseName · ${l('Name ändern', 'Сменить имя', 'Change name')}', style: L.t(12, c: L.muted)),
+                      child: Text('${s.groupName.isEmpty ? courseName : s.groupName} · ${l('Name ändern', 'Сменить имя', 'Change name')}', style: L.t(12, c: L.muted)),
                     ),
                   ],
                 ),
@@ -199,7 +201,7 @@ class _IchScreenState extends State<IchScreen> {
               l('Link kopieren', 'Копировать ссылку', 'Copy link'),
               color: L.muted,
               onTap: () async {
-                await Clipboard.setData(ClipboardData(text: inviteLink()));
+                await Clipboard.setData(ClipboardData(text: inviteLink(s)));
                 if (context.mounted) toast(context, l('Kopiert', 'Скопировано', 'Copied'));
               },
             ),
@@ -344,6 +346,7 @@ class _IchScreenState extends State<IchScreen> {
         ],
         Panel(
           child: Rows([
+            _Item(Icons.groups_outlined, l('Gruppe wechseln', 'Сменить группу', 'Change group'), _changeGroup),
             _Item(Icons.flag_outlined, tr(s.lang, 'report'), () => reportDialog(context, s, 'app')),
             _Item(
               Icons.restore_from_trash_outlined,
@@ -360,6 +363,34 @@ class _IchScreenState extends State<IchScreen> {
         ),
         const SizedBox(height: 70),
       ],
+    );
+  }
+
+  Future<void> _changeGroup() async {
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (ctx) => Padding(
+        padding: EdgeInsets.fromLTRB(20, 0, 20, 20 + MediaQuery.of(ctx).viewInsets.bottom),
+        child: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                l(
+                  'Dein Lernfortschritt bleibt. Aufgaben, Hinweise und Rangliste kommen aus der neuen Gruppe.',
+                  'Прогресс в учёбе сохранится. Задания, объявления и рейтинг будут из новой группы.',
+                  'Your learning progress stays. Tasks, notices and ranking come from the new group.',
+                ),
+                style: L.t(13, c: L.muted),
+              ),
+              const SizedBox(height: 12),
+              GroupPicker(s: s, onDone: () => Navigator.of(ctx).pop()),
+            ],
+          ),
+        ),
+      ),
     );
   }
 

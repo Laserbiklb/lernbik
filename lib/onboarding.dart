@@ -1,10 +1,11 @@
 import 'package:material_ui/material_ui.dart';
 
+import 'groups.dart';
 import 'i18n.dart';
 import 'store.dart';
 import 'theme.dart';
 
-/// First start: language → name → group (link, new group, or recovery code).
+/// First start: language → name → group (pick an existing one or create a new one).
 class Onboarding extends StatefulWidget {
   final AppState s;
   const Onboarding({super.key, required this.s});
@@ -60,6 +61,16 @@ class _OnboardingState extends State<Onboarding> {
                 const SizedBox(height: 6),
                 Text(t('tagline'), style: Theme.of(context).textTheme.bodyLarge),
                 const SizedBox(height: 24),
+                if (s.key.isNotEmpty && s.nick.isNotEmpty) ...[
+                  Text(l3(s.lang, 'Hallo, ${s.nick}!', 'Привет, ${s.nick}!', 'Hi, ${s.nick}!'), style: L.h(26)),
+                  const SizedBox(height: 14),
+                  GroupPicker(s: s),
+                  const SizedBox(height: 18),
+                  TextButton(
+                    onPressed: s.logout,
+                    child: Text(l3(s.lang, 'Anderer Name', 'Другое имя', 'Another name')),
+                  ),
+                ] else ...[
                 Text(t('lang'), style: Theme.of(context).textTheme.titleSmall),
                 const SizedBox(height: 8),
                 SegmentedButton<String>(
@@ -79,6 +90,7 @@ class _OnboardingState extends State<Onboarding> {
                 const SizedBox(height: 12),
                 FilledButton(onPressed: busy ? null : _go, child: Text(t('next'))),
                 if (err != null) ...[const SizedBox(height: 12), Text(err!, style: TextStyle(color: Theme.of(context).colorScheme.error))],
+                ],
               ],
             ),
           ),

@@ -10,12 +10,19 @@ import 'firebase_options.dart';
 import 'learn/data.dart';
 import 'learn/progress.dart';
 
-/// The course group. Everyone who opens Lernbik lands here.
+/// The first course group; its admin is [ownerNick]. Other groups are owned by whoever created them.
 const courseGid = 'vhs-lueneburg';
 const courseName = 'VHS Lüneburg';
 
-/// The main admin (by name). Admins move the course to the next chapter and pick helpers.
+/// The admin of [courseGid] (by name). Admins move the course to the next chapter and pick helpers.
 const ownerNick = 'laserbik';
+
+/// A group in the list on the first start.
+class GroupInfo {
+  final String id, name;
+  final int members;
+  GroupInfo(this.id, this.name, this.members);
+}
 
 /// "  Anna  Maria " → "anna maria". Same name → same account.
 String nickId(String n) => n.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ').replaceAll('/', '_');
@@ -136,8 +143,9 @@ class AppState extends ChangeNotifier {
       gid = prefs.getString('gid') ?? '';
       mid = prefs.getString('mid') ?? '';
       _listenUser();
-      if (gid != courseGid) joinGroup(courseGid);
     }
+    // An invite link (…/?g=ID) preselects the group.
+    pendingGroup = parseGroup(Uri.base.toString());
     ready = true;
     notifyListeners();
   }
@@ -163,10 +171,11 @@ class AppState extends ChangeNotifier {
     final ref = db.collection('nicks').doc(nickId(n));
     final snap = await ref.get();
     _cancel();
+    var d0 = <String, dynamic>{};
     if (snap.exists) {
       key = (snap.data()!['key'] ?? '') as String;
       final u = await userDoc.get();
-      final d = u.data() ?? {};
+      final d = d0 = u.data() ?? {};
       nick = (d['nick'] ?? n) as String;
       mid = (d['mid'] ?? randomId(10)) as String;
     } else {
@@ -187,8 +196,11 @@ class AppState extends ChangeNotifier {
     await prefs.setString('key', key);
     await prefs.setString('nick', nick);
     await prefs.setString('mid', mid);
+    gid = (d0['gid'] ?? '') as String;
+    if (gid.isNotEmpty) await prefs.setString('gid', gid);
     _listenUser();
-    await joinGroup(courseGid);
+    if (gid.isNotEmpty) await joinGroup(gid);
+    notifyListeners();
   }
 
   /// Log out on this phone (the account stays and opens again with the same name).
@@ -224,22 +236,53 @@ class AppState extends ChangeNotifier {
     return s.exists ? (s.data()?['name'] ?? '') as String : null;
   }
 
+  /// All groups with their member counts, for the list on the first start and in Ich.
+  Future<List<GroupInfo>> listGroups() async {
+    final q = await db.collection('groups').get();
+    final out = <GroupInfo>[];
+    for (final d in q.docs) {
+      final name = (d.data()['name'] ?? '') as String;
+      if (name.trim().isEmpty) continue;
+      var n = 0;
+      try {
+        n = (await d.reference.collection('members').count().get()).count ?? 0;
+      } catch (_) {}
+      out.add(GroupInfo(d.id, name, n));
+    }
+    if (!out.any((g) => g.id == courseGid)) out.add(GroupInfo(courseGid, courseName, 0));
+    out.sort((a, b) => b.members != a.members ? b.members.compareTo(a.members) : a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+    return out;
+  }
+
+  /// Join a group; leaves the previous one (its ranking) first.
   Future<void> joinGroup(String id) async {
     if (id == courseGid && await groupExists(id) == null) {
       await db.collection('groups').doc(id).set({'name': courseName, 'created': FieldValue.serverTimestamp(), 'examDate': '', 'examName': ''});
     }
+    if (gid.isNotEmpty && gid != id) await _memberDoc().delete().catchError((_) {});
     gid = id;
     pendingGroup = null;
     await prefs.setString('gid', gid);
     await userDoc.set({'gid': gid}, SetOptions(merge: true));
     await _memberDoc().set({'nick': nick, 'joined': FieldValue.serverTimestamp()}, SetOptions(merge: true));
+    learn.setMember(_memberDoc());
     _listenGroup();
     notifyListeners();
   }
 
+  /// A new group; whoever creates it is its admin.
   Future<void> createGroup(String name) async {
     final id = randomId(10);
-    await db.collection('groups').doc(id).set({'name': name.trim(), 'created': FieldValue.serverTimestamp(), 'examDate': '', 'examName': ''});
+    await db.collection('groups').doc(id).set({
+      'name': name.trim(),
+      'created': FieldValue.serverTimestamp(),
+      'examDate': '',
+      'examName': '',
+      'ownerMid': mid,
+      'ownerNick': nick,
+      'course': {'lv': 'A1', 'n': 1, 'since': ymd(DateTime.now())},
+      'helpers': [],
+    });
     await joinGroup(id);
   }
 
@@ -248,6 +291,7 @@ class AppState extends ChangeNotifier {
     gid = '';
     await prefs.remove('gid');
     await userDoc.set({'gid': ''}, SetOptions(merge: true));
+    learn.setMember(null);
     _cancelGroup();
     notifyListeners();
   }
@@ -257,11 +301,11 @@ class AppState extends ChangeNotifier {
   StreamSubscription? _userSub;
   void _listenUser() {
     _userSub?.cancel();
-    learn.attach(key, nick, mid.isEmpty ? null : db.collection('groups').doc(courseGid).collection('members').doc(mid));
+    learn.attach(key, nick, mid.isEmpty || gid.isEmpty ? null : _memberDoc());
     _userSub = userDoc.snapshots().listen((s) {
       final d = s.data() ?? {};
       nick = (d['nick'] ?? nick) as String;
-      final g = courseGid;
+      final g = (d['gid'] ?? gid) as String;
       if (d['mid'] is String && (d['mid'] as String).isNotEmpty) mid = d['mid'] as String;
       done = Map<String, bool>.from((d['done'] ?? {}) as Map);
       remindOn = d['remindOn'] != false;
@@ -284,6 +328,8 @@ class AppState extends ChangeNotifier {
       groupDoc.snapshots().listen((s) {
         final d = s.data() ?? {};
         groupName = (d['name'] ?? '') as String;
+        groupOwnerMid = (d['ownerMid'] ?? '') as String;
+        groupOwnerNick = (d['ownerNick'] ?? (gid == courseGid ? 'Laserbik' : '')) as String;
         final c = d['course'];
         if (c is Map) {
           courseLv = c['lv'] == 'A2' ? 'A2' : 'A1';
@@ -364,7 +410,8 @@ class AppState extends ChangeNotifier {
   Future<void> setNewsDeleted(String id, bool v) => groupDoc.collection('news').doc(id).update({'deleted': v});
 
   // ---------- course chapter (admins) ----------
-  bool get isOwner => nickId(nick) == ownerNick;
+  String groupOwnerMid = '', groupOwnerNick = '';
+  bool get isOwner => gid == courseGid ? nickId(nick) == ownerNick : (groupOwnerMid.isNotEmpty && groupOwnerMid == mid);
   bool get isAdmin => isOwner || helpers.any((h) => h['mid'] == mid);
 
   Future<void> setCourse(String lv, int n) => groupDoc.set({

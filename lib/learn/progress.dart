@@ -98,6 +98,12 @@ class Progress extends ChangeNotifier {
     voice = o['voice'] != false;
   }
 
+  /// The member document of the current group (stats for the ranking); null when in no group.
+  void setMember(DocumentReference<Map<String, dynamic>>? member) {
+    _member = member;
+    _statsSoon();
+  }
+
   /// Load local progress for this account and start syncing.
   Future<void> attach(String key, String nick, DocumentReference<Map<String, dynamic>>? member) async {
     _prefs ??= await SharedPreferences.getInstance();
