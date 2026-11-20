@@ -23,7 +23,9 @@ service cloud.firestore {
     match /groups/{gid} {
       // Everyone sees the list of groups on the first start and can join any of them.
       allow get, list: if signedIn();
-      allow create: if signedIn() && request.resource.data.keys().hasOnly(['name', 'created', 'examDate', 'examName', 'ownerMid', 'ownerNick', 'course', 'helpers'])
+      // The old course group "vhs-lueneburg" was closed (everyone moved to "VHS Lüneburg 277"); old app versions
+      // must not bring it back.
+      allow create: if signedIn() && gid != 'vhs-lueneburg' && request.resource.data.keys().hasOnly(['name', 'created', 'examDate', 'examName', 'ownerMid', 'ownerNick', 'course', 'helpers'])
         && request.resource.data.name is string && request.resource.data.name.size() > 1 && request.resource.data.name.size() <= 40;
       // course = the chapter the course is on now; helpers = who may move it (set in the app by admins).
       allow update: if signedIn() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['examDate', 'examName', 'course', 'helpers'])
@@ -33,16 +35,17 @@ service cloud.firestore {
       // Homework: everyone can add and edit; deleting is a soft delete.
       match /hw/{id} {
         allow read: if signedIn();
-        allow create, update: if signedIn() && request.resource.data.text is string && request.resource.data.text.size() < 2000;
+        allow create, update: if signedIn() && gid != 'vhs-lueneburg' && request.resource.data.text is string && request.resource.data.text.size() < 2000;
       }
       match /news/{id} {
         allow read: if signedIn();
-        allow create, update: if signedIn() && request.resource.data.text is string && request.resource.data.text.size() < 500;
+        allow create, update: if signedIn() && gid != 'vhs-lueneburg' && request.resource.data.text is string && request.resource.data.text.size() < 500;
       }
       // Public stats per member: nick, word count, learned topics, streak.
       match /members/{mid} {
         allow read: if signedIn();
-        allow create, update, delete: if signedIn();
+        allow create, update: if signedIn() && gid != 'vhs-lueneburg';
+        allow delete: if signedIn();
       }
     }
 
