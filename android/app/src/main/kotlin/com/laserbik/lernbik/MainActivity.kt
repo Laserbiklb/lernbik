@@ -1,12 +1,13 @@
 package com.laserbik.lernbik
 
+import android.content.Intent
 import android.speech.tts.TextToSpeech
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 import java.util.Locale
 
-/** German text to speech for the word games (channel "lernbik/tts"). */
+/** German text to speech for the word games (channel "lernbik/tts") and Google Translate ("lernbik/translate"). */
 class MainActivity : FlutterActivity() {
     private var tts: TextToSpeech? = null
     private var ready = false
@@ -41,6 +42,27 @@ class MainActivity : FlutterActivity() {
                 else -> result.notImplemented()
             }
         }
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "lernbik/translate").setMethodCallHandler { call, result ->
+            if (call.method == "open") result.success(translate(call.argument<String>("text") ?: "")) else result.notImplemented()
+        }
+    }
+
+    /** Opens the Google Translate app with the text filled in; false if the app is missing. */
+    private fun translate(text: String): Boolean {
+        val pkg = "com.google.android.apps.translate"
+        val tries = listOf(
+            Intent(Intent.ACTION_PROCESS_TEXT).setType("text/plain").putExtra(Intent.EXTRA_PROCESS_TEXT, text)
+                .putExtra(Intent.EXTRA_PROCESS_TEXT_READONLY, true),
+            Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, text),
+        )
+        for (i in tries) {
+            try {
+                startActivity(i.setPackage(pkg))
+                return true
+            } catch (_: Exception) {
+            }
+        }
+        return false
     }
 
     override fun onDestroy() {

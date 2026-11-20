@@ -1,19 +1,13 @@
 import 'package:material_ui/material_ui.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../i18n.dart';
+import '../ui.dart' show openTranslate;
 import '../theme.dart';
 
 enum OptState { idle, sel, good, bad, dim }
 
 /// Opens Google Translate from German into the phone's language.
-void openGoogle(String text) {
-  final to = WidgetsBinding.instance.platformDispatcher.locale.languageCode;
-  launchUrl(
-    Uri.https('translate.google.com', '/', {'sl': 'de', 'tl': to == 'de' ? 'en' : to, 'text': text, 'op': 'translate'}),
-    mode: LaunchMode.externalApplication,
-  );
-}
+void openGoogle(String text) => openTranslate(text);
 
 /// An answer button with a colored laser bar on the left.
 class OptionTile extends StatelessWidget {

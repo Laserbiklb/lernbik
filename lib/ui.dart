@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart' show kIsWeb, defaultTargetPlatform, TargetPlatform;
+import 'package:flutter/services.dart' show MethodChannel;
 import 'package:material_ui/material_ui.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -24,10 +26,28 @@ Future<bool> confirm(BuildContext context, String lang, String title, {String? b
 }
 
 /// Opens Google Translate from German into the phone's language.
-void openTranslate(String text) {
+/// The Google Translate app ignores the text of a translate.google.com link, so on Android the text
+/// is handed to the app directly (in the APK through the "lernbik/translate" channel, in the browser
+/// through an intent: link); the web page is the fallback.
+Future<void> openTranslate(String text) async {
   final to = WidgetsBinding.instance.platformDispatcher.locale.languageCode;
-  final u = Uri.https('translate.google.com', '/', {'sl': 'de', 'tl': to == 'de' ? 'en' : to, 'text': text, 'op': 'translate'});
-  launchUrl(u, mode: LaunchMode.externalApplication);
+  final web = Uri.https('translate.google.com', '/', {'sl': 'de', 'tl': to == 'de' ? 'en' : to, 'text': text, 'op': 'translate'});
+  if (defaultTargetPlatform == TargetPlatform.android) {
+    if (!kIsWeb) {
+      try {
+        if (await const MethodChannel('lernbik/translate').invokeMethod<bool>('open', {'text': text}) == true) return;
+      } catch (_) {}
+    } else {
+      final e = Uri.encodeComponent;
+      final intent =
+          'intent:#Intent;action=android.intent.action.SEND;type=text/plain;package=com.google.android.apps.translate;'
+          'S.android.intent.extra.TEXT=${e(text)};S.browser_fallback_url=${e(web.toString())};end';
+      try {
+        if (await launchUrl(Uri.parse(intent))) return;
+      } catch (_) {}
+    }
+  }
+  await launchUrl(web, mode: LaunchMode.externalApplication);
 }
 
 void openUrl(String url) => launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
