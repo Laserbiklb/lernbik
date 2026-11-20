@@ -224,12 +224,7 @@ class _ExerciseScreenState extends State<ExerciseScreen> {
     if (ok) {
       right++;
       doneN++;
-      final id = runId, at = cur;
-      if (t.an.isEmpty) {
-        timer = Timer(Duration(milliseconds: t.why.isNotEmpty ? 2000 : 900), () {
-          if (mounted && id == runId && cur == at) _next();
-        });
-      }
+      // No auto-skip: the learner always taps "Next".
       wait = true;
     } else {
       if (!miss.contains(t)) miss.add(t);
@@ -562,11 +557,13 @@ class _ExerciseScreenState extends State<ExerciseScreen> {
                   ],
                 ),
               ),
-            if (wait && (!fbOk! || t.an.isNotEmpty || t.kind == 'type')) ...[
+            if (wait) ...[
               const SizedBox(height: 10),
               Row(
                 children: [
-                  Expanded(child: GlowButton(l('Weiter', 'Дальше', 'Next'), size: 16, onTap: _next)),
+                  Expanded(
+                    child: GlowButton(l('Weiter', 'Дальше', 'Next'), color: fbOk! ? L.das : L.die, textColor: fbOk! ? L.bg : null, size: 16, onTap: _next),
+                  ),
                   if (voice)
                     IconButton(
                       tooltip: l('Anhören', 'Послушать', 'Listen'),

@@ -259,7 +259,7 @@ class Verdict extends StatelessWidget {
                 children: [
                   if (onNext != null)
                     Expanded(
-                      child: GlowButton(l3(lang, 'Weiter', 'Дальше', 'Next'), color: L.die, size: 16, onTap: onNext),
+                      child: GlowButton(l3(lang, 'Weiter', 'Дальше', 'Next'), color: ok ? L.das : L.die, textColor: ok ? L.bg : null, size: 16, onTap: onNext),
                     ),
                   if (onSay != null)
                     IconButton(

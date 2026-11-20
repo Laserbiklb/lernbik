@@ -305,11 +305,8 @@ class _RoundScreenState extends State<RoundScreen> {
       _bump();
       fbOk = true;
       fbMsg = null;
-      final id = runId;
-      final at = cur;
-      Timer(const Duration(milliseconds: 750), () {
-        if (mounted && id == runId && cur == at && phase == 'q') setState(_nextQ);
-      });
+      // No auto-skip: the learner always taps "Next".
+      wait = true;
     } else {
       missed.add(w.k);
       queue.add(w);
@@ -339,16 +336,7 @@ class _RoundScreenState extends State<RoundScreen> {
       doneN++;
       _bump();
       setState(() {});
-      final id = runId;
-      if (doneN >= total) {
-        Timer(const Duration(milliseconds: 600), () {
-          if (mounted && id == runId) setState(_nextStage);
-        });
-      } else if (pdone.length >= pl.length && pq.isNotEmpty) {
-        Timer(const Duration(milliseconds: 600), () {
-          if (mounted && id == runId) setState(_pairsChunk);
-        });
-      }
+      // A finished set waits for "Next" (see _pairs).
     } else {
       missed.add(lw.k);
       combo = 0;
@@ -764,10 +752,20 @@ class _RoundScreenState extends State<RoundScreen> {
             ),
           ),
         const SizedBox(height: 6),
-        Text(
-          l('Tippe ein deutsches Wort, dann seine Übersetzung.', 'Нажмите немецкое слово, затем его перевод.', 'Tap a German word, then its translation.'),
-          style: L.t(13, c: L.muted),
-        ),
+        if (pdone.length >= pl.length)
+          Appear(
+            child: GlowButton(
+              l('Weiter', 'Дальше', 'Next'),
+              color: L.das,
+              textColor: L.bg,
+              onTap: () => setState(doneN >= total || pq.isEmpty ? _nextStage : _pairsChunk),
+            ),
+          )
+        else
+          Text(
+            l('Tippe ein deutsches Wort, dann seine Übersetzung.', 'Нажмите немецкое слово, затем его перевод.', 'Tap a German word, then its translation.'),
+            style: L.t(13, c: L.muted),
+          ),
       ],
     );
   }

@@ -1,4 +1,4 @@
-// Sends homework reminders. Runs every 30 minutes from GitHub Actions.
+// Sends homework and word-review reminders. Runs every 30 minutes from GitHub Actions.
 // Needs FIREBASE_SA (service account JSON) in the environment.
 import { initializeApp, cert } from 'firebase-admin/app';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
@@ -10,10 +10,13 @@ const msg = getMessaging();
 
 const T = {
   de: { hw: (n) => n === 1 ? '1 Hausaufgabe ist noch offen' : `${n} Hausaufgaben sind noch offen`,
+        rev: (n) => `📚 ${n} Wörter warten aufs Wiederholen`,
         streak: (s) => `🔥 Serie: ${s} Tage – lerne heute ein paar Wörter!`, title: 'Lernbik' },
   ru: { hw: (n) => `Несделанных заданий: ${n}`,
+        rev: (n) => `📚 Пора повторить слов: ${n}`,
         streak: (s) => `🔥 Серия ${s} дн. — не прерывай, повтори пару слов!`, title: 'Lernbik' },
   en: { hw: (n) => n === 1 ? '1 homework task is still open' : `${n} homework tasks are still open`,
+        rev: (n) => `📚 ${n} words are due for review`,
         streak: (s) => `🔥 Streak: ${s} days – learn a few words today!`, title: 'Lernbik' },
 };
 const pad = (n) => String(n).padStart(2, '0');
@@ -27,6 +30,18 @@ async function groupInfo(gid) {
     groups.set(gid, hw.docs.map((d) => ({ id: d.id, due: d.get('due') || '' })));
   }
   return groups.get(gid);
+}
+
+// Words due for review (seen words whose next repetition time has passed), from the learning progress wk/{key}.
+const MIN_DUE = 5;
+async function dueWords(key) {
+  try {
+    const w = await db.collection('wk').doc(key).get();
+    const o = JSON.parse(w.get('json') || '{}');
+    return Object.values(o.prog || {}).filter((b) => b && typeof b.due === 'number' && b.due <= now).length;
+  } catch {
+    return 0;
+  }
 }
 
 const users = await db.collection('users').where('remindOn', '==', true).get();
@@ -55,10 +70,12 @@ for (const u of users.docs) {
   }
   const lastSlot = [...times].sort().at(-1) === slot;
   const atRisk = streak > 0 && !learnedToday;
-  if (!open && !(atRisk && lastSlot)) continue;
+  const due = await dueWords(u.id);
+  const review = due >= MIN_DUE ? due : 0;
+  if (!open && !review && !(atRisk && lastSlot)) continue;
 
   const t = T[d.lang] || T.de;
-  const body = [open ? t.hw(open) : null, atRisk ? t.streak(streak) : null].filter(Boolean).join('\n');
+  const body = [open ? t.hw(open) : null, review ? t.rev(review) : null, atRisk ? t.streak(streak) : null].filter(Boolean).join('\n');
   const r = await msg.sendEachForMulticast({
     tokens,
     notification: { title: t.title, body },
