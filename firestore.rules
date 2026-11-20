@@ -28,6 +28,8 @@ service cloud.firestore {
       allow create: if signedIn() && gid != 'vhs-lueneburg' && request.resource.data.keys().hasOnly(['name', 'created', 'examDate', 'examName', 'ownerMid', 'ownerNick', 'course', 'helpers'])
         && request.resource.data.name is string && request.resource.data.name.size() > 1 && request.resource.data.name.size() <= 40;
       // course = the chapter the course is on now; helpers = who may move it (set in the app by admins).
+      // Deleting is done by the main admin in the app (the app checks who; the rules can't, names aren't verified).
+      allow delete: if signedIn();
       allow update: if signedIn() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['examDate', 'examName', 'course', 'helpers'])
         && (!('course' in request.resource.data) || (request.resource.data.course.lv in ['A1', 'A2'] && request.resource.data.course.n is int))
         && (!('helpers' in request.resource.data) || (request.resource.data.helpers is list && request.resource.data.helpers.size() <= 20));
@@ -36,10 +38,17 @@ service cloud.firestore {
       match /hw/{id} {
         allow read: if signedIn();
         allow create, update: if signedIn() && gid != 'vhs-lueneburg' && request.resource.data.text is string && request.resource.data.text.size() < 2000;
+        allow delete: if signedIn();
       }
       match /news/{id} {
         allow read: if signedIn();
         allow create, update: if signedIn() && gid != 'vhs-lueneburg' && request.resource.data.text is string && request.resource.data.text.size() < 500;
+        allow delete: if signedIn();
+      }
+      // "Move to another group" notes from the main admin; the person's app follows and deletes it.
+      match /moves/{mid} {
+        allow read, delete: if signedIn();
+        allow create, update: if signedIn() && request.resource.data.to is string && request.resource.data.to.size() < 40;
       }
       // Public stats per member: nick, word count, learned topics, streak.
       match /members/{mid} {

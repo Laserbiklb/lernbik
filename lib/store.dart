@@ -291,6 +291,36 @@ class AppState extends ChangeNotifier {
     await joinGroup(id);
   }
 
+  /// The main admin (Laserbik): may delete groups and move people between them.
+  bool get isSuper => nickId(nick) == ownerNick;
+
+  /// Main admin: members of any group.
+  Future<List<Member>> membersOf(String id) async {
+    final q = await db.collection('groups').doc(id).collection('members').get();
+    return q.docs.map((d) => Member(d.id, d.data())).toList()..sort((a, b) => a.nick.toLowerCase().compareTo(b.nick.toLowerCase()));
+  }
+
+  /// Main admin: moves someone. Their entry goes to the new group right away; their app follows
+  /// through groups/{from}/moves/{mid} (older app versions don't follow).
+  Future<void> moveMember(String from, String to, String id) async {
+    final g = db.collection('groups');
+    final m = await g.doc(from).collection('members').doc(id).get();
+    if (m.exists) await g.doc(to).collection('members').doc(id).set(m.data()!, SetOptions(merge: true));
+    await g.doc(from).collection('moves').doc(id).set({'to': to, 'at': FieldValue.serverTimestamp()});
+    await g.doc(from).collection('members').doc(id).delete();
+  }
+
+  /// Main admin: deletes a group with its tasks, notices and ranking. Its people choose a new group.
+  Future<void> deleteGroup(String id) async {
+    final g = db.collection('groups').doc(id);
+    for (final c in ['members', 'hw', 'news', 'moves']) {
+      for (final d in (await g.collection(c).get()).docs) {
+        await d.reference.delete();
+      }
+    }
+    await g.delete();
+  }
+
   Future<void> leaveGroup() async {
     if (gid.isNotEmpty) await _memberDoc().delete().catchError((_) {});
     gid = '';
@@ -334,6 +364,11 @@ class AppState extends ChangeNotifier {
     if (gid.isEmpty) return;
     _subs.add(
       groupDoc.snapshots().listen((s) {
+        // The group was deleted (by the main admin): back to the group list.
+        if (!s.exists && !s.metadata.isFromCache) {
+          leaveGroup();
+          return;
+        }
         final d = s.data() ?? {};
         groupName = (d['name'] ?? '') as String;
         groupOwnerMid = (d['ownerMid'] ?? '') as String;
@@ -363,6 +398,22 @@ class AppState extends ChangeNotifier {
         notifyListeners();
       }),
     );
+    // Moved to another group by the main admin: follow.
+    if (mid.isNotEmpty) {
+      final mv = groupDoc.collection('moves').doc(mid);
+      _subs.add(
+        mv.snapshots().listen((s) async {
+          final to = s.data()?['to'];
+          if (to is! String || to.isEmpty || to == gid) return;
+          await mv.delete().catchError((_) {});
+          try {
+            await joinGroup(to);
+          } catch (_) {
+            await leaveGroup();
+          }
+        }),
+      );
+    }
     _subs.add(
       groupDoc.collection('members').snapshots().listen((s) {
         members = s.docs.map((d) => Member(d.id, d.data())).toList()..sort((a, b) => b.words.compareTo(a.words));

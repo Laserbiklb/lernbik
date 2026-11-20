@@ -10,6 +10,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'firebase_options.dart';
 import 'fx.dart';
 import 'groups.dart';
+import 'groups_admin.dart';
 import 'heute.dart';
 import 'i18n.dart';
 import 'learn/data.dart';
@@ -388,6 +389,12 @@ class _IchScreenState extends State<IchScreen> {
         Panel(
           child: Rows([
             _Item(Icons.groups_outlined, l('Gruppe wechseln', 'Сменить группу', 'Change group'), _changeGroup),
+            if (s.isSuper)
+              _Item(
+                Icons.admin_panel_settings_outlined,
+                l('Alle Gruppen verwalten', 'Управлять всеми группами', 'Manage all groups'),
+                () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => AllGroupsScreen(s: s))),
+              ),
             _Item(Icons.flag_outlined, tr(s.lang, 'report'), () => reportDialog(context, s, 'app')),
             _Item(
               Icons.restore_from_trash_outlined,
