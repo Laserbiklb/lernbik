@@ -1,10 +1,11 @@
-# Homework reminders: every 30 minutes, sends a push to everyone whose reminder time it is
-# and who still has open homework. GitHub may start scheduled runs a few minutes late.
+# Reminders (homework, words to review): every 30 minutes, sends a push to everyone whose reminder
+# time has come. GitHub starts scheduled runs late or skips some (fewer at odd minutes), so the
+# script also sends reminders that are up to 3 hours late.
 name: Reminders
 
 on:
   schedule:
-    - cron: "0,30 * * * *"
+    - cron: "7,37 * * * *"
   workflow_dispatch:
 
 jobs:

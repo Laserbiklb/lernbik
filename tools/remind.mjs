@@ -44,6 +44,7 @@ async function dueWords(key) {
   }
 }
 
+const WINDOW = 180;
 const users = await db.collection('users').where('remindOn', '==', true).get();
 let sent = 0;
 for (const u of users.docs) {
@@ -51,10 +52,15 @@ for (const u of users.docs) {
   const tokens = Array.isArray(d.tokens) ? d.tokens : [];
   if (!tokens.length || !d.gid) continue;
   const local = new Date(now + (Number(d.tz) || 60) * 60000);
-  const slot = `${pad(local.getUTCHours())}:${local.getUTCMinutes() < 30 ? '00' : '30'}`;
   const times = Array.isArray(d.remind) ? d.remind : ['10:00', '22:00'];
   const today = ymd(local);
-  if (!times.includes(slot) || (d.sent && d.sent[slot] === today)) continue;
+  // GitHub starts scheduled runs late or skips some, so a reminder goes out at the first run after
+  // its time (up to WINDOW minutes late), once a day.
+  const mins = local.getUTCHours() * 60 + local.getUTCMinutes();
+  const toMin = (t) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5));
+  const dueSlots = times.filter((t) => mins >= toMin(t) && mins - toMin(t) <= WINDOW && !(d.sent && d.sent[t] === today)).sort();
+  if (!dueSlots.length) continue;
+  const slot = dueSlots.at(-1);
 
   const hw = await groupInfo(d.gid);
   const done = d.done || {};
@@ -86,9 +92,10 @@ for (const u of users.docs) {
     const e = r.responses[i].error;
     return e && /registration-token-not-registered|invalid-argument|invalid-registration-token/.test(e.code);
   });
-  const upd = { [`sent.${slot}`]: today };
+  const upd = Object.fromEntries(dueSlots.map((t) => [`sent.${t}`, today]));
   if (bad.length) upd.tokens = FieldValue.arrayRemove(...bad);
   await u.ref.update(upd);
   sent += r.successCount;
 }
-console.log(`users checked: ${users.size}, notifications sent: ${sent}`);
+const withTokens = users.docs.filter((u) => (u.get('tokens') || []).length).length;
+console.log(`users with reminders: ${users.size}, of them with a device for push: ${withTokens}, notifications sent: ${sent}`);
