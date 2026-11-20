@@ -341,6 +341,19 @@ class _IchScreenState extends State<IchScreen> {
                     ],
                   ),
                 ),
+              if (s.isOwner)
+                InkWell(
+                  onTap: _manageMembers,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    child: Row(
+                      children: [
+                        Expanded(child: Text(l('Mitglieder verwalten', 'Управлять участниками', 'Manage members'), style: L.b(14))),
+                        Text('${s.members.length} ›', style: L.b(13, L.sign)),
+                      ],
+                    ),
+                  ),
+                ),
             ]),
           ),
         ],
@@ -502,6 +515,66 @@ class _IchScreenState extends State<IchScreen> {
       await s.setCourse(chosen.$1, chosen.$2);
       if (mounted) toast(context, l('Gespeichert', 'Сохранено', 'Saved'));
     }
+  }
+
+  /// Owner: list of all members with a remove button (for duplicates and people who left).
+  Future<void> _manageMembers() async {
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (ctx) => DraggableScrollableSheet(
+        expand: false,
+        initialChildSize: .75,
+        builder: (ctx, sc) => ListenableBuilder(
+          listenable: s,
+          builder: (ctx, _) {
+            final ms = [...s.members]..sort((a, b) => a.nick.toLowerCase().compareTo(b.nick.toLowerCase()));
+            return ListView(
+              controller: sc,
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+              children: [
+                Text(l('Mitglieder', 'Участники', 'Members'), style: L.h(22)),
+                const SizedBox(height: 4),
+                Text(
+                  l(
+                    'Entfernen nimmt jemanden aus der Gruppe und der Rangliste. Öffnet die Person die App wieder mit diesem Konto, ist sie wieder dabei.',
+                    'Удаление убирает человека из группы и рейтинга. Если он снова откроет приложение под этим аккаунтом, то вернётся.',
+                    'Removing takes someone out of the group and the ranking. If they open the app again with that account, they are back.',
+                  ),
+                  style: L.t(12, c: L.muted),
+                ),
+                const SizedBox(height: 8),
+                for (final m in ms)
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: Text(m.nick.isEmpty ? '—' : m.nick, style: L.b(15)),
+                    subtitle: Text(
+                      '${m.words} ${l('Wörter', 'слов', 'words')} · ${m.xp} XP${m.day.isEmpty ? '' : ' · ${l('zuletzt', 'был', 'last')} ${fmtDate(s.lang, m.day)}'}',
+                      style: L.t(12, c: L.muted),
+                    ),
+                    trailing: m.id == s.mid
+                        ? Pill(l('du', 'ты', 'you'), color: L.das)
+                        : IconButton(
+                            tooltip: l('Entfernen', 'Удалить', 'Remove'),
+                            icon: const Icon(Icons.person_remove_outlined, color: L.die),
+                            onPressed: () async {
+                              final ok = await confirm(
+                                context,
+                                s.lang,
+                                l('${m.nick} entfernen?', 'Удалить ${m.nick}?', 'Remove ${m.nick}?'),
+                                yes: l('Entfernen', 'Удалить', 'Remove'),
+                                danger: true,
+                              );
+                              if (ok) await s.removeMember(m.id);
+                            },
+                          ),
+                  ),
+              ],
+            );
+          },
+        ),
+      ),
+    );
   }
 
   Future<void> _addHelper() async {

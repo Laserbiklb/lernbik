@@ -418,6 +418,12 @@ class AppState extends ChangeNotifier {
     'course': {'lv': lv, 'n': n, 'since': ymd(DateTime.now())},
   }, SetOptions(merge: true));
 
+  /// Admin: take someone off the group (e.g. a duplicate account). They come back if they open the app again with that account.
+  Future<void> removeMember(String id) async {
+    if (helpers.any((h) => h['mid'] == id)) await setHelpers(helpers.where((h) => h['mid'] != id).toList());
+    await groupDoc.collection('members').doc(id).delete();
+  }
+
   Future<void> setHelpers(List<Map<String, String>> h) => groupDoc.set({'helpers': h}, SetOptions(merge: true));
 
   // ---------- reminders ----------
