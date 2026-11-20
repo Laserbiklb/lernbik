@@ -9,9 +9,9 @@ const apply = process.env.MODE === 'apply';
 const norm = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9а-яё]/g, '').replace(/^вхс/, 'vhs');
 
 const groups = (await db.collection('groups').get()).docs;
-const targets = groups.filter((g) => norm(g.get('name')) === 'vhs277');
+const targets = groups.filter((g) => norm(g.get('name')).includes('277'));
 if (targets.length !== 1) {
-  console.log('Expected exactly one group named "VHS 277", found:', targets.map((g) => `${g.get('name')} (${g.id})`));
+  console.log('Expected exactly one group with 277 in the name, found:', targets.map((g) => `${g.get('name')} (${g.id})`));
   for (const g of groups) console.log(`- ${g.get('name')} (${g.id})`);
   process.exit(1);
 }
