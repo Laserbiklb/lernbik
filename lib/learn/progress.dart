@@ -47,6 +47,14 @@ class Progress extends ChangeNotifier {
   List<Word> own = [];
   Map<String, int> rclean = {}; // rule id → level 0 … 5 (old data: clean runs, capped at 5)
   Map<String, int> rdue = {}; // rule id → when to repeat (ms); set once a rule was practised
+
+  /// Per rule, what was practised in it (e.g. "vp:sich freuen über", "a:akk:m"): -1 = last answer
+  /// wrong, 1 = right once, 2 = right twice (mastered). A rule counts as learned only when every
+  /// element of it is mastered ([ruleElements] says which elements a rule has).
+  Map<String, Map<String, int>> rel = {};
+
+  /// The elements of a rule (set by tasks.dart).
+  static List<String> Function(String ruleId)? ruleElements;
   Map<String, int> best = {}; // trainer records
   Map<String, List<int>> tstat = {}; // trainer topic → [answered, right at first try]
   int rsize = 12;
@@ -80,6 +88,7 @@ class Progress extends ChangeNotifier {
     ],
     'rclean': rclean,
     'rdue': rdue,
+    'rel': rel,
     'best': best,
     'rsize': rsize,
     'voice': voice,
@@ -107,6 +116,14 @@ class Progress extends ChangeNotifier {
     };
     rclean = ints('rclean');
     rdue = ints('rdue');
+    rel = {
+      for (final e in (o['rel'] as Map? ?? {}).entries)
+        if (e.value is Map)
+          e.key as String: {
+            for (final x in (e.value as Map).entries)
+              if (x.value is num) x.key as String: (x.value as num).toInt(),
+          },
+    };
     best = ints('best');
     tstat = {
       for (final e in (o['tstat'] as Map? ?? {}).entries)
@@ -194,7 +211,39 @@ class Progress extends ChangeNotifier {
   int get learnedRules => rclean.keys.where(learned).length;
 
   /// Level of a rule (0 … 5), -1 when it was never practised.
-  int ruleBox(String ruleId) => rdue.containsKey(ruleId) || rclean.containsKey(ruleId) ? min(5, rclean[ruleId] ?? 0) : -1;
+  int ruleBox(String ruleId) {
+    final b = _rawBox(ruleId);
+    // Not every element mastered yet: at most "learning", however many clean runs.
+    return b >= ruleLearnedBox && !ruleCovered(ruleId) ? ruleLearnedBox - 1 : b;
+  }
+
+  int _rawBox(String ruleId) => rdue.containsKey(ruleId) || rclean.containsKey(ruleId) ? min(5, rclean[ruleId] ?? 0) : -1;
+
+  /// (mastered, all) elements of a rule.
+  (int, int) ruleCoverage(String ruleId) {
+    final els = ruleElements?.call(ruleId) ?? const <String>[];
+    final got = rel[ruleId] ?? const {};
+    return (els.where((e) => (got[e] ?? 0) >= 2).length, els.length);
+  }
+
+  bool ruleCovered(String ruleId) {
+    final (m, n) = ruleCoverage(ruleId);
+    return m >= n;
+  }
+
+  /// Records the answers of a run: a right answer counts once per run and element, a wrong one
+  /// marks the element as missed (it has to be answered right twice again).
+  void recordElements(String ruleId, Iterable<(String, bool)> answers) {
+    final got = rel[ruleId] ??= {};
+    final wrong = {for (final (e, ok) in answers) if (!ok) e};
+    final right = {for (final (e, ok) in answers) if (ok) e}..removeAll(wrong);
+    for (final e in wrong) {
+      got[e] = -1;
+    }
+    for (final e in right) {
+      got[e] = min(2, max(0, got[e] ?? 0) + 1);
+    }
+  }
   bool learned(String ruleId) => ruleBox(ruleId) >= ruleLearnedBox;
   bool ruleDue(String ruleId) => rdue.containsKey(ruleId) && rdue[ruleId]! <= DateTime.now().millisecondsSinceEpoch;
 
@@ -327,7 +376,7 @@ class Progress extends ChangeNotifier {
   /// One run of a rule's exercises, as words: a run without mistakes moves the rule up a level and
   /// it comes back later (iv); a run with a mistake keeps the level and the rule is due again at once.
   void _ruleRun(String ruleId, bool clean) {
-    final b0 = max(0, ruleBox(ruleId));
+    final b0 = max(0, _rawBox(ruleId));
     final b = clean ? min(5, b0 + 1) : b0;
     rclean[ruleId] = b;
     final now = DateTime.now().millisecondsSinceEpoch;

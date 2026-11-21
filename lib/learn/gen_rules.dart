@@ -5,6 +5,7 @@ import 'dart:math';
 import 'data.dart';
 import 'exercise.dart';
 import 'gen_cases.dart' show cap;
+import 'progress.dart' show Progress;
 import 'tasks.dart';
 
 T _p<T>(Random r, List<T> a) => a[r.nextInt(a.length)];
@@ -746,4 +747,5 @@ Task _rel(Random r, String lang, bool dat) {
 
 void registerRuleGens() {
   ruleGens.addAll(_gens);
+  Progress.ruleElements = (id) => elementsOf(id).keys.toList();
 }

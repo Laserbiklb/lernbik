@@ -18,7 +18,8 @@ bool hasTasks(Rule r) => gensFor(r).isNotEmpty || (LearnData.i.quiz[r.id]?.isNot
 
 
 /// A run for a rule: mostly freshly generated tasks, mixed with the handwritten ones.
-List<Task> tasksForRule(Rule r, String lang, {int n = 6}) {
+/// [got]: what was already mastered in this rule (Progress.rel); not-yet-mastered elements come first.
+List<Task> tasksForRule(Rule r, String lang, {int n = 6, Map<String, int>? got}) {
   final gens = gensFor(r);
   // Handwritten tasks explain in Russian; in German/English only the generated ones are used.
   final cyr = RegExp('[а-яА-ЯёЁ]');
@@ -48,6 +49,23 @@ List<Task> tasksForRule(Rule r, String lang, {int n = 6}) {
   final fromQz = qz.isEmpty ? 0 : max(1, n ~/ 3);
   for (final t in qz.take(fromQz)) {
     addT(t);
+  }
+  // What hasn't been mastered yet first (missed ones, then new ones); one place stays for the rest.
+  final els = elementsOf(r.id);
+  if (got != null && els.isNotEmpty) {
+    final open = els.keys.where((e) => (got[e] ?? 0) < 2).toSet();
+    final room = open.length < els.length ? n - 1 : n;
+    for (final wantMissed in [true, false]) {
+      final want = wantMissed ? open.where((e) => (got[e] ?? 0) < 0).toSet() : open;
+      var t2 = 0;
+      while (out.length < room && want.isNotEmpty && t2 < n * 40) {
+        t2++;
+        try {
+          final t = gens[_rnd.nextInt(gens.length)](_rnd, lang);
+          if (want.contains(elementOf(t))) addT(t);
+        } catch (_) {}
+      }
+    }
   }
   var tries = 0;
   while (out.length < n && tries < n * 30) {
@@ -162,3 +180,74 @@ List<String> focusKeys(Task t) {
 
 /// Kept for the test: the verb + preposition, or else the sentence.
 String focusOf(Task t) => focusKeys(t).firstWhere((k) => k.startsWith('vp:'), orElse: () => focusKeys(t).first);
+
+// ---------- what a rule consists of ----------
+
+/// The element of a rule a task practises: the verb + preposition, else the kind of task
+/// (e.g. "a:akk:m" = article, Akkusativ, masculine), else its answer.
+String elementOf(Task t) {
+  for (final k in focusKeys(t)) {
+    if (k.startsWith('vp:')) return k;
+  }
+  if (t.key.isNotEmpty) return 'k:${t.key.split(':').take(3).join(':')}';
+  final a = t.answer.isNotEmpty ? t.answer : t.answers.join(' / ');
+  return 'a:${a.toLowerCase()}';
+}
+
+final _elCache = <String, Map<String, String>>{};
+
+/// The elements of a rule with a short label each, found by trying its generators (always the same
+/// for a rule): the common ones, at most 16.
+Map<String, String> elementsOf(String ruleId) {
+  final hit = _elCache[ruleId];
+  if (hit != null) return hit;
+  final rule = LearnData.i.rule(ruleId);
+  final gens = rule == null ? const <Gen>[] : gensFor(rule);
+  final count = <String, int>{};
+  final answers = <String, Map<String, int>>{};
+  if (gens.isNotEmpty) {
+    var seed = 7;
+    for (final c in ruleId.codeUnits) {
+      seed = (seed * 31 + c) & 0x3fffffff;
+    }
+    final r = Random(seed);
+    for (var i = 0; i < 400; i++) {
+      try {
+        final t = gens[r.nextInt(gens.length)](r, 'de');
+        final e = elementOf(t);
+        count[e] = (count[e] ?? 0) + 1;
+        final a = t.answer.isNotEmpty ? t.answer : t.answers.join(' / ');
+        (answers[e] ??= {})[a] = (answers[e]![a] ?? 0) + 1;
+      } catch (_) {}
+    }
+  }
+  // Tasks that only differ by their (very varied) answer — dates, spelled words, whole sentences —
+  // have no useful parts to cover: such a rule goes by its level alone.
+  if (count.keys.where((k) => k.startsWith('a:')).length > 50) return _elCache[ruleId] = const {};
+  final keys = count.keys.where((k) => count[k]! >= 6).toList()..sort((a, b) => count[b]!.compareTo(count[a]!));
+  final out = <String, String>{for (final k in keys.take(16)) k: _label(k, answers[k] ?? const {})};
+  return _elCache[ruleId] = out;
+}
+
+const _caseShort = {'nom': 'Nom', 'akk': 'Akk', 'dat': 'Dat', 'gen': 'Gen'};
+const _orderNames = {
+  'v2': 'Verb auf Platz 2',
+  'wq': 'W-Frage',
+  'yn': 'Ja/Nein-Frage',
+  'mod': 'Modalverb',
+  'sub': 'weil / dass',
+  'ind': 'indirekte Frage',
+  'sep': 'trennbares Verb',
+  'pf': 'Perfekt',
+};
+
+String _label(String k, Map<String, int> answers) {
+  if (k.startsWith('vp:')) return k.substring(3);
+  final top = answers.isEmpty ? '' : (answers.entries.toList()..sort((a, b) => b.value.compareTo(a.value))).first.key;
+  if (k.startsWith('a:')) return k.substring(2);
+  final p = k.substring(2).split(':');
+  if (p.length >= 3 && p[0] == 'v' && p[1] == 'o') return _orderNames[p[2]] ?? top;
+  final cs = p.map((x) => _caseShort[x]).whereType<String>().toList();
+  final g = p.where((x) => const {'m', 'f', 'n', 'pl'}.contains(x)).toList();
+  return cs.isEmpty ? top : '$top · ${cs.first}${g.isEmpty ? '' : ' ${g.first}'}';
+}

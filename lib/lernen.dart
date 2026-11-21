@@ -363,12 +363,14 @@ class RuleScreen extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   RuleLevel(s: s, r: r),
+                  const SizedBox(height: 10),
+                  RuleElements(s: s, r: r),
                   const SizedBox(height: 8),
                   Text(
                     l(
-                      'Jede Runde ohne Fehler hebt die Regel eine Stufe: lerne → kann → sicher. Ab „kann“ gilt sie als gelernt. Danach kommt sie zur Wiederholung zurück – je höher die Stufe, desto später. Ein Fehler senkt nichts, die Regel kommt nur bald wieder.',
-                      'Каждый заход без ошибок поднимает правило на уровень: учу → знаю → закреплено. Начиная со «знаю» оно считается выученным. Потом правило возвращается на повторение — чем выше уровень, тем позже. Ошибка уровень не снижает, правило просто скоро вернётся.',
-                      'Every run without mistakes moves the rule up a level: learning → know → solid. From “know” on it counts as learned. Then it comes back for review – the higher the level, the later. A mistake lowers nothing, the rule just comes back soon.',
+                      'Jede Runde ohne Fehler hebt die Regel eine Stufe: lerne → kann → sicher. Gelernt ist sie erst, wenn alles oben zweimal richtig war (grün). Was noch fehlt, kommt in den Runden zuerst. Danach kommt die Regel zur Wiederholung zurück – je höher die Stufe, desto später.',
+                      'Каждый заход без ошибок поднимает правило на уровень: учу → знаю → закреплено. Выученным оно станет, только когда всё в списке выше будет отвечено правильно дважды (зелёное). Чего не хватает, попадается в заходах первым. Потом правило возвращается на повторение — чем выше уровень, тем позже.',
+                      'Every run without mistakes moves the rule up a level: learning → know → solid. It counts as learned only when everything above was answered right twice (green). What is missing comes first in the runs. Then the rule comes back for review – the higher the level, the later.',
                     ),
                     style: L.t(12, c: L.muted),
                   ),
@@ -440,7 +442,8 @@ void practiseRule(BuildContext context, AppState s, Rule r) {
         title: r.t(s.lang),
         lang: s.lang,
         p: s.learn,
-        make: () => tasksForRule(r, s.lang),
+        make: () => tasksForRule(r, s.lang, got: s.learn.rel[r.id]),
+        onTasks: (all, missed) => s.learn.recordElements(r.id, [for (final t in all) (elementOf(t), !missed.contains(t))]),
         onDone: (clean, right, first, total) => s.learn.applyRuleRun(r.id, clean, right),
         doneExtra: (ctx, clean, first, total) => Panel(
           padding: const EdgeInsets.all(14),
@@ -448,6 +451,8 @@ void practiseRule(BuildContext context, AppState s, Rule r) {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               RuleLevel(s: s, r: r),
+              const SizedBox(height: 10),
+              RuleElements(s: s, r: r),
               const SizedBox(height: 8),
               Text(
                 clean
@@ -812,6 +817,64 @@ class RuleLevel extends StatelessWidget {
   }
 }
 
+/// What a rule consists of, as coloured chips: green = right twice, yellow = right once,
+/// red = last answer wrong, grey = not practised yet.
+class RuleElements extends StatelessWidget {
+  final AppState s;
+  final Rule r;
+  const RuleElements({super.key, required this.s, required this.r});
+  @override
+  Widget build(BuildContext context) {
+    final els = elementsOf(r.id);
+    if (els.length < 2) return const SizedBox.shrink();
+    final got = s.learn.rel[r.id] ?? const {};
+    Color col(int g) => g >= 2 ? L.das : (g == 1 ? L.sign : (g < 0 ? L.die : L.muted));
+    String short(String x) => x.length > 30 ? '${x.substring(0, 28)}…' : x;
+    final l = (String de, String ru, String en) => _l(s, de, ru, en);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Wrap(
+          spacing: 6,
+          runSpacing: 6,
+          children: [
+            for (final e in els.entries)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                decoration: BoxDecoration(
+                  color: col(got[e.key] ?? 0).withValues(alpha: (got[e.key] ?? 0) == 0 ? .08 : .16),
+                  borderRadius: BorderRadius.circular(99),
+                  border: Border.all(color: col(got[e.key] ?? 0).withValues(alpha: .55)),
+                ),
+                child: Text(short(e.value), style: L.b(12, (got[e.key] ?? 0) == 0 ? L.muted : col(got[e.key]!))),
+              ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        Wrap(
+          spacing: 10,
+          children: [
+            for (final (c, t) in [
+              (L.das, l('sicher', 'освоено', 'mastered')),
+              (L.sign, l('einmal richtig', 'один раз', 'right once')),
+              (L.die, l('Fehler', 'ошибка', 'mistake')),
+              (L.muted, l('noch nicht', 'ещё не было', 'not yet')),
+            ])
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(width: 8, height: 8, decoration: BoxDecoration(color: c, shape: BoxShape.circle)),
+                  const SizedBox(width: 4),
+                  Text(t, style: L.t(11, c: L.muted)),
+                ],
+              ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
 /// Rules waiting for review (all chapters), the longest overdue first.
 List<Rule> dueRules(Progress p) {
   final out = [
@@ -842,7 +905,7 @@ void reviewRules(BuildContext context, AppState s) {
           picked = dueRules(s.learn).take(3).toList();
           final out = <Task>[];
           for (final r in picked) {
-            for (final t in tasksForRule(r, s.lang, n: 3)) {
+            for (final t in tasksForRule(r, s.lang, n: 3, got: s.learn.rel[r.id])) {
               owner[t] = r.id;
               out.add(t);
             }
@@ -850,6 +913,12 @@ void reviewRules(BuildContext context, AppState s) {
           return out..shuffle();
         },
         onTasks: (all, missed) {
+          for (final r in picked) {
+            s.learn.recordElements(r.id, [
+              for (final t in all)
+                if (owner[t] == r.id) (elementOf(t), !missed.contains(t)),
+            ]);
+          }
           cleanByRule = {for (final r in picked) r.id: true};
           for (final t in missed) {
             final id = owner[t];
