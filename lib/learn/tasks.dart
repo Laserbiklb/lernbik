@@ -120,13 +120,29 @@ List<Task> tasksForTopic(String topic, String lang, {int n = 8}) {
   return _spread(out);
 }
 
-/// Reorders so that two tasks about the same thing don't come right after each other, where possible.
+/// Reorders a run: never three tasks of the same format in a row (choose / write / order / find
+/// the mistake), where the run has other formats; and two tasks about the same thing not right
+/// after each other, where possible.
 List<Task> _spread(List<Task> ts) {
   final left = [...ts], out = <Task>[];
   while (left.isNotEmpty) {
     final last = out.isEmpty ? const <String>{} : focusKeys(out.last).where((k) => !k.startsWith('full:')).toSet();
-    final i = left.indexWhere((t) => !focusKeys(t).any(last.contains));
-    out.add(left.removeAt(i < 0 ? 0 : i));
+    // The format that would make three in a row.
+    final banned = out.length >= 2 && out[out.length - 1].kind == out[out.length - 2].kind ? out.last.kind : null;
+    final remaining = <String, int>{};
+    for (final t in left) {
+      remaining[t.kind] = (remaining[t.kind] ?? 0) + 1;
+    }
+    int score(Task t) =>
+        (t.kind == banned ? -1000 : 0) + // the hard rule
+        remaining[t.kind]! * 10 + // use up the most common format first, so it doesn't pile up at the end
+        (focusKeys(t).any(last.contains) ? -5 : 0) +
+        (out.isNotEmpty && out.last.kind == t.kind ? -3 : 0);
+    var best = 0;
+    for (var i = 1; i < left.length; i++) {
+      if (score(left[i]) > score(left[best])) best = i;
+    }
+    out.add(left.removeAt(best));
   }
   return out;
 }

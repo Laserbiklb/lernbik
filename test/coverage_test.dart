@@ -28,4 +28,34 @@ void main() {
     }
     expect(worst, lessThanOrEqualTo(20), reason: rows.join('\n'));
   });
+
+  test('never three tasks of one format in a row (when the run has other formats)', () async {
+    var bad = 0, total = 0;
+    final runs = [
+      for (final r in LearnData.i.rules) () => tasksForRule(r, 'ru'),
+      for (final t in trainers)
+        for (final tp in t.topics) () => tasksForTopic(tp.id, 'ru', n: tp.n),
+    ];
+    for (final make in runs) {
+      for (var i = 0; i < 30; i++) {
+        final ts = make();
+        final kinds = ts.map((t) => t.kind).toList();
+        final counts = <String, int>{};
+        for (final k in kinds) {
+          counts[k] = (counts[k] ?? 0) + 1;
+        }
+        // Possible only if the most common format isn't more than twice the others + 2.
+        final most = counts.values.fold(0, (a, b) => a > b ? a : b);
+        if (most > 2 * (kinds.length - most) + 2) continue;
+        total++;
+        for (var j = 2; j < kinds.length; j++) {
+          if (kinds[j] == kinds[j - 1] && kinds[j] == kinds[j - 2]) {
+            bad++;
+            break;
+          }
+        }
+      }
+    }
+    expect(bad, 0, reason: '$bad of $total runs');
+  });
 }
