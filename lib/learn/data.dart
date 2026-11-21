@@ -195,5 +195,26 @@ bool similarWords(Word a, Word b) {
     p++;
   }
   if (p >= 6) return true;
+  // Compounds with the same last part: Heimwerkerkurs / Schauspielkurs, Kinderzimmer / Wohnzimmer.
+  if (a.a.isNotEmpty && b.a.isNotEmpty && _sameTail(x, y)) return true;
   return (long.length - short.length) <= 2 && _lev(x, y) <= (short.length <= 4 ? 1 : 2);
+}
+
+const _suffixes = ['schaft', 'ismus', 'heit', 'keit', 'erin', 'erei', 'tion', 'chen', 'lein', 'ling', 'ität', 'ung', 'ion', 'nis', 'tum', 'sal', 'ent', 'ant', 'enz', 'anz', 'ei', 'ur', 'ik', 'in', 'er', 'el', 'en', 'ie', 'e'];
+
+/// Whether two nouns end in the same word part (at least 3 letters besides a plain suffix like -ung, -er).
+bool _sameTail(String x, String y) {
+  var n = 0;
+  while (n < x.length && n < y.length && x[x.length - 1 - n] == y[y.length - 1 - n]) {
+    n++;
+  }
+  if (n < 4) return false;
+  var tail = x.substring(x.length - n);
+  for (final sfx in _suffixes) {
+    if (tail.endsWith(sfx)) {
+      tail = tail.substring(0, tail.length - sfx.length);
+      break;
+    }
+  }
+  return tail.length >= 3;
 }

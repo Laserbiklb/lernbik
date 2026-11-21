@@ -15,5 +15,10 @@ void main() {
     expect(similarWords(w('', 'gehen', 'идти'), w('', 'sehen', 'видеть')), isTrue); // one letter apart
     expect(similarWords(w('', 'kaufen', 'покупать'), w('', 'laufen', 'бегать')), isTrue);
     expect(similarWords(w('', 'essen', 'есть'), w('', 'trinken', 'пить')), isFalse);
+    expect(similarWords(w('der', 'Heimwerkerkurs', 'курс ремонта'), w('der', 'Schauspielkurs', 'курс актёров')), isTrue);
+    expect(similarWords(w('der', 'Erste-Hilfe-Kurs', 'курс первой помощи'), w('der', 'Tanzkurs', 'курс танцев')), isTrue);
+    expect(similarWords(w('das', 'Kinderzimmer', 'детская'), w('das', 'Wohnzimmer', 'гостиная')), isTrue);
+    expect(similarWords(w('die', 'Rechnung', 'счёт'), w('die', 'Wohnung', 'квартира')), isFalse);
+    expect(similarWords(w('die', 'Zeitung', 'газета'), w('die', 'Rechnung', 'счёт')), isFalse);
   });
 }
