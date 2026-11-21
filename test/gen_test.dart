@@ -92,5 +92,30 @@ void main() {
     }
     // ignore: avoid_print
     print('topics ${topicGens.length}, rules with tasks $withTasks of ${LearnData.i.rules.length}');
+
+    // Never more than two tasks about the same verb + preposition in one run.
+    var maxSeen = 0;
+    for (final lang in ['ru', 'de']) {
+      Word.lang = lang;
+      for (var i = 0; i < 200; i++) {
+        for (final ts in [
+          tasksForTopic('verbs:prep', lang),
+          for (final rule in LearnData.i.rules.where((x) => x.trainers.any((t) => t[0] == 'verbs'))) tasksForRule(rule, lang),
+        ]) {
+          final c = <String, int>{};
+          for (final t in ts) {
+            final f = focusOf(t);
+            c[f] = (c[f] ?? 0) + 1;
+          }
+          for (final e in c.entries) {
+            if (e.key.startsWith('vp:')) maxSeen = max(maxSeen, e.value);
+            expect(e.value, lessThanOrEqualTo(maxSameFocus), reason: e.key);
+          }
+        }
+      }
+    }
+    Word.lang = 'ru';
+    // ignore: avoid_print
+    print('max tasks with the same verb + preposition in a run: $maxSeen');
   });
 }
