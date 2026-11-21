@@ -53,7 +53,10 @@ const _blocks = {'p', 'ul', 'ol', 'table', 'div', 'tr', 'li', 'h3', 'h4'};
 class RuleHtml extends StatelessWidget {
   final String html;
   final double size;
-  const RuleHtml(this.html, {super.key, this.size = 14.5});
+
+  /// Words to colour wherever they stand (e.g. how well each part of a rule is mastered).
+  final Map<String, Color> marks;
+  const RuleHtml(this.html, {super.key, this.size = 14.5, this.marks = const {}});
 
   @override
   Widget build(BuildContext context) => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: _blocksOf(_parse(html).kids));
@@ -167,7 +170,7 @@ class RuleHtml extends StatelessWidget {
   InlineSpan _span(_N n, TextStyle st) {
     switch (n.tag) {
       case '#':
-        return TextSpan(text: n.text, style: st);
+        return _marked(n.text, st);
       case 'br':
         return TextSpan(text: '\n', style: st);
       case 'b':
@@ -191,6 +194,34 @@ class RuleHtml extends StatelessWidget {
       default:
         return TextSpan(children: n.kids.map((k) => _span(k, st)).toList());
     }
+  }
+}
+
+extension on RuleHtml {
+  /// Plain text with the [marks] words coloured (longest first, whole words only).
+  InlineSpan _marked(String text, TextStyle st) {
+    if (marks.isEmpty) return TextSpan(text: text, style: st);
+    final ws = marks.keys.toList()..sort((a, b) => b.length.compareTo(a.length));
+    final re = RegExp(
+      '(?<![A-Za-zÄÖÜäöüß])(${ws.map(RegExp.escape).join('|')})(?![A-Za-zÄÖÜäöüß])',
+      caseSensitive: false,
+    );
+    final out = <InlineSpan>[];
+    var at = 0;
+    for (final m in re.allMatches(text)) {
+      if (m.start > at) out.add(TextSpan(text: text.substring(at, m.start), style: st));
+      final key = ws.firstWhere((w) => w.toLowerCase() == m.group(1)!.toLowerCase());
+      final c = marks[key]!;
+      out.add(
+        TextSpan(
+          text: m.group(1),
+          style: st.copyWith(color: c, fontWeight: FontWeight.w700, backgroundColor: c.withValues(alpha: .14)),
+        ),
+      );
+      at = m.end;
+    }
+    if (at < text.length) out.add(TextSpan(text: text.substring(at), style: st));
+    return TextSpan(children: out);
   }
 }
 

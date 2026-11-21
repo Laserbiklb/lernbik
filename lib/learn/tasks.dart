@@ -225,9 +225,25 @@ Map<String, String> elementsOf(String ruleId) {
   // have no useful parts to cover: such a rule goes by its level alone.
   if (count.keys.where((k) => k.startsWith('a:')).length > 50) return _elCache[ruleId] = const {};
   final keys = count.keys.where((k) => count[k]! >= 6).toList()..sort((a, b) => count[b]!.compareTo(count[a]!));
-  final out = <String, String>{for (final k in keys.take(16)) k: _label(k, answers[k] ?? const {})};
-  return _elCache[ruleId] = out;
+  // Only what the rule itself shows (its text and example), so it can be coloured right there.
+  final text = rule == null ? '' : '${rule.b('de')} ${rule.b('ru')} ${rule.ex}'.replaceAll(RegExp('<[^>]*>'), ' ');
+  final out = <String, String>{};
+  for (final k in keys) {
+    final label = _label(k, answers[k] ?? const {});
+    final word = elementWord(label);
+    // Whole sentences aren't parts of a rule; words and short phrases (sich freuen über) are.
+    if (word.length >= 2 && word.split(' ').length <= 3 && wordIn(word, text)) out[k] = label;
+    if (out.length >= 16) break;
+  }
+  return _elCache[ruleId] = out.length >= 2 ? out : const {};
 }
+
+/// The word(s) of an element as they stand in the rule text ("dem · Dat m" → "dem", "um … zu" → "um").
+String elementWord(String label) => label.split(' · ').first.trim();
+
+RegExp wordRe(String w) => RegExp('(?<![A-Za-zÄÖÜäöüß])${RegExp.escape(w)}(?![A-Za-zÄÖÜäöüß])', caseSensitive: false);
+
+bool wordIn(String w, String text) => wordRe(w).hasMatch(text);
 
 const _caseShort = {'nom': 'Nom', 'akk': 'Akk', 'dat': 'Dat', 'gen': 'Gen'};
 const _orderNames = {

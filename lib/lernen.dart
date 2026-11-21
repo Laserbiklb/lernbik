@@ -338,7 +338,7 @@ class RuleScreen extends StatelessWidget {
           actions: [Text('${idx + 1}/${c.rules.length}', style: L.b(13, L.muted))],
           children: [
             Text(r.t(s.lang), style: L.h(30)),
-            Panel(padding: const EdgeInsets.fromLTRB(14, 14, 14, 6), child: RuleHtml(r.b(s.lang))),
+            Panel(padding: const EdgeInsets.fromLTRB(14, 14, 14, 6), child: RuleHtml(r.b(s.lang), marks: ruleMarks(s.learn, r))),
             if (r.ex.isNotEmpty)
               Panel(
                 color: L.der.withValues(alpha: .08),
@@ -346,7 +346,7 @@ class RuleScreen extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                 child: Row(
                   children: [
-                    Expanded(child: Text(r.ex.replaceAll(RegExp(r'<[^>]+>'), ''), style: L.b(14))),
+                    Expanded(child: RuleHtml(r.ex.replaceAll(RegExp(r'<[^>]+>'), ''), size: 14, marks: ruleMarks(s.learn, r))),
                     if (Tts.available)
                       IconButton(
                         tooltip: l('Anhören', 'Послушать', 'Listen'),
@@ -368,9 +368,9 @@ class RuleScreen extends StatelessWidget {
                   const SizedBox(height: 8),
                   Text(
                     l(
-                      'Jede Runde ohne Fehler hebt die Regel eine Stufe: lerne → kann → sicher. Gelernt ist sie erst, wenn alles oben zweimal richtig war (grün). Was noch fehlt, kommt in den Runden zuerst. Danach kommt die Regel zur Wiederholung zurück – je höher die Stufe, desto später.',
-                      'Каждый заход без ошибок поднимает правило на уровень: учу → знаю → закреплено. Выученным оно станет, только когда всё в списке выше будет отвечено правильно дважды (зелёное). Чего не хватает, попадается в заходах первым. Потом правило возвращается на повторение — чем выше уровень, тем позже.',
-                      'Every run without mistakes moves the rule up a level: learning → know → solid. It counts as learned only when everything above was answered right twice (green). What is missing comes first in the runs. Then the rule comes back for review – the higher the level, the later.',
+                      'Jede Runde ohne Fehler hebt die Regel eine Stufe: lerne → kann → sicher. Gelernt ist sie erst, wenn alle farbigen Wörter in der Regel oben zweimal richtig waren (grün). Was noch fehlt, kommt in den Runden zuerst. Danach kommt die Regel zur Wiederholung zurück – je höher die Stufe, desto später.',
+                      'Каждый заход без ошибок поднимает правило на уровень: учу → знаю → закреплено. Выученным оно станет, только когда все цветные слова в правиле выше будут отвечены правильно дважды (зелёные). Чего не хватает, попадается в заходах первым. Потом правило возвращается на повторение — чем выше уровень, тем позже.',
+                      'Every run without mistakes moves the rule up a level: learning → know → solid. It counts as learned only when all coloured words in the rule above were answered right twice (green). What is missing comes first in the runs. Then the rule comes back for review – the higher the level, the later.',
                     ),
                     style: L.t(12, c: L.muted),
                   ),
@@ -817,59 +817,50 @@ class RuleLevel extends StatelessWidget {
   }
 }
 
-/// What a rule consists of, as coloured chips: green = right twice, yellow = right once,
-/// red = last answer wrong, grey = not practised yet.
+/// How well each part of a rule is mastered, as colours for its words in the rule text:
+/// green = right twice, yellow = right once, red = last answer wrong, grey = not practised yet.
+/// Parts with the same word (dem · Dat m / dem · Dat n) share it; the weakest one counts.
+Color _stateColor(int g) => g >= 2 ? L.das : (g == 1 ? L.sign : (g < 0 ? L.die : L.muted));
+
+Map<String, Color> ruleMarks(Progress p, Rule r) {
+  final got = p.rel[r.id] ?? const {};
+  final worst = <String, int>{};
+  int rank(int g) => g < 0 ? -1 : g; // mistake < not yet < once < twice
+  for (final e in elementsOf(r.id).entries) {
+    final w = elementWord(e.value).toLowerCase();
+    final g = got[e.key] ?? 0;
+    worst[w] = worst.containsKey(w) ? (rank(g) < rank(worst[w]!) ? g : worst[w]!) : g;
+  }
+  return {for (final e in worst.entries) e.key: _stateColor(e.value)};
+}
+
+/// The legend for the colours in the rule text (only for rules that have parts).
 class RuleElements extends StatelessWidget {
   final AppState s;
   final Rule r;
   const RuleElements({super.key, required this.s, required this.r});
   @override
   Widget build(BuildContext context) {
-    final els = elementsOf(r.id);
-    if (els.length < 2) return const SizedBox.shrink();
-    final got = s.learn.rel[r.id] ?? const {};
-    Color col(int g) => g >= 2 ? L.das : (g == 1 ? L.sign : (g < 0 ? L.die : L.muted));
-    String short(String x) => x.length > 30 ? '${x.substring(0, 28)}…' : x;
+    if (elementsOf(r.id).isEmpty) return const SizedBox.shrink();
     final l = (String de, String ru, String en) => _l(s, de, ru, en);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    return Wrap(
+      spacing: 10,
+      runSpacing: 4,
       children: [
-        Wrap(
-          spacing: 6,
-          runSpacing: 6,
-          children: [
-            for (final e in els.entries)
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
-                decoration: BoxDecoration(
-                  color: col(got[e.key] ?? 0).withValues(alpha: (got[e.key] ?? 0) == 0 ? .08 : .16),
-                  borderRadius: BorderRadius.circular(99),
-                  border: Border.all(color: col(got[e.key] ?? 0).withValues(alpha: .55)),
-                ),
-                child: Text(short(e.value), style: L.b(12, (got[e.key] ?? 0) == 0 ? L.muted : col(got[e.key]!))),
-              ),
-          ],
-        ),
-        const SizedBox(height: 6),
-        Wrap(
-          spacing: 10,
-          children: [
-            for (final (c, t) in [
-              (L.das, l('sicher', 'освоено', 'mastered')),
-              (L.sign, l('einmal richtig', 'один раз', 'right once')),
-              (L.die, l('Fehler', 'ошибка', 'mistake')),
-              (L.muted, l('noch nicht', 'ещё не было', 'not yet')),
-            ])
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(width: 8, height: 8, decoration: BoxDecoration(color: c, shape: BoxShape.circle)),
-                  const SizedBox(width: 4),
-                  Text(t, style: L.t(11, c: L.muted)),
-                ],
-              ),
-          ],
-        ),
+        for (final (c, t) in [
+          (L.das, l('sicher', 'освоено', 'mastered')),
+          (L.sign, l('einmal richtig', 'один раз', 'right once')),
+          (L.die, l('Fehler', 'ошибка', 'mistake')),
+          (L.muted, l('noch nicht', 'ещё не было', 'not yet')),
+        ])
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(width: 8, height: 8, decoration: BoxDecoration(color: c, shape: BoxShape.circle)),
+              const SizedBox(width: 4),
+              Text(t, style: L.t(11, c: L.muted)),
+            ],
+          ),
       ],
     );
   }
