@@ -29,12 +29,14 @@ List<Task> tasksForRule(Rule r, String lang, {int n = 6}) {
   final out = <Task>[];
   final seen = <String>{};
   final per = <String, int>{};
-  void addT(Task t) {
+  void addT(Task t, {bool force = false}) {
     if (out.length >= n || seen.contains(t.sig)) return;
-    final f = focusOf(t);
-    if ((per[f] ?? 0) >= maxSameFocus) return;
+    final ks = focusKeys(t);
+    if (!force && !_fits(ks, per)) return;
     seen.add(t.sig);
-    per[f] = (per[f] ?? 0) + 1;
+    for (final k in ks) {
+      per[k] = (per[k] ?? 0) + 1;
+    }
     out.add(t);
   }
 
@@ -57,6 +59,14 @@ List<Task> tasksForRule(Rule r, String lang, {int n = 6}) {
   for (final t in qz) {
     addT(t);
   }
+  // Too few different tasks for this rule: fill up anyway (spread out below).
+  tries = 0;
+  while (out.length < n && tries < n * 20) {
+    tries++;
+    try {
+      addT(gens[_rnd.nextInt(gens.length)](_rnd, lang), force: true);
+    } catch (_) {}
+  }
   out.shuffle(_rnd);
   return _spread(out);
 }
@@ -72,9 +82,11 @@ List<Task> tasksForTopic(String topic, String lang, {int n = 8}) {
     tries++;
     try {
       final t = gens[_rnd.nextInt(gens.length)](_rnd, lang);
-      final f = focusOf(t);
-      if ((per[f] ?? 0) >= maxSameFocus || !seen.add(t.sig)) continue;
-      per[f] = (per[f] ?? 0) + 1;
+      final ks = focusKeys(t);
+      if (!_fits(ks, per) || !seen.add(t.sig)) continue;
+      for (final k in ks) {
+        per[k] = (per[k] ?? 0) + 1;
+      }
       out.add(t);
     } catch (_) {}
   }
@@ -94,27 +106,59 @@ List<Task> tasksForTopic(String topic, String lang, {int n = 8}) {
 List<Task> _spread(List<Task> ts) {
   final left = [...ts], out = <Task>[];
   while (left.isNotEmpty) {
-    final last = out.isEmpty ? null : focusOf(out.last);
-    final i = left.indexWhere((t) => focusOf(t) != last);
+    final last = out.isEmpty ? const <String>{} : focusKeys(out.last).where((k) => !k.startsWith('full:')).toSet();
+    final i = left.indexWhere((t) => !focusKeys(t).any(last.contains));
     out.add(left.removeAt(i < 0 ? 0 : i));
   }
   return out;
 }
 
-/// At most this many tasks about the same thing (e.g. "sich freuen über") in one run.
+/// At most this many tasks about the same thing (e.g. "sich freuen über", "Frau Müller") in one run;
+/// the very same sentence only once.
 const maxSameFocus = 2;
+
+bool _fits(List<String> ks, Map<String, int> per) => ks.every((k) => (per[k] ?? 0) < (k.startsWith('full:') ? 1 : maxSameFocus));
 
 List<String>? _vpInf;
 
-/// What a task is about: the verb + preposition it practises (sich freuen über), or else the
-/// sentence itself — so a run doesn't keep coming back to the same combination.
-String focusOf(Task t) {
+String _plain(String s) => s.replaceAll(RegExp('<[^>]*>'), '').replaceAll(RegExp(r'\s+'), ' ').trim();
+
+const _notNouns = {'Sie', 'Ihnen', 'Ihr', 'Ihre', 'Ihren', 'Ihrem', 'Ihrer', 'Ja', 'Nein', 'Doch'};
+
+/// What a task is about, for variety in a run: the verb + preposition it practises
+/// (sich freuen über), the nouns and names in its sentence (Problem, Frau Müller), and the sentence itself.
+List<String> focusKeys(Task t) {
   _vpInf ??= [
     for (final v in (LearnData.i.trs['ru']!['VP'] as List? ?? const [])) '${(v as Map)['inf']}',
   ]..sort((a, b) => b.length.compareTo(a.length));
+  final keys = <String>[];
   final txt = '${t.why} ${t.an} ${t.full}';
   for (final inf in _vpInf!) {
-    if (txt.contains(inf)) return 'vp:$inf';
+    if (txt.contains(inf)) {
+      keys.add('vp:$inf');
+      break;
+    }
   }
-  return 'full:${t.full.isNotEmpty ? t.full : t.sig}';
+  final sentence = _plain(t.full.isNotEmpty ? t.full : '${t.text} ${t.html}');
+  if (sentence.isNotEmpty) keys.add('full:${sentence.toLowerCase().replaceAll(RegExp(r'[^a-zäöüß ]'), '')}');
+  // The sentence pattern with its nouns, names and numbers taken out ("Das ist ein _. Das _ ist neu."),
+  // so that one pattern doesn't fill the whole run.
+  final words = sentence.split(RegExp(r'\s+'));
+  final tpl = [
+    for (var i = 0; i < words.length; i++)
+      i > 0 && RegExp('^[A-ZÄÖÜ0-9]').hasMatch(words[i]) && !RegExp(r'[.!?:—–]$').hasMatch(words[i - 1]) && words[i - 1] != '—'
+          ? '_'
+          : words[i].toLowerCase(),
+  ].join(' ');
+  if (words.length >= 3) keys.add('tpl:$tpl');
+  // Capitalised words that don't start a sentence: nouns and names.
+  for (var i = 1; i < words.length; i++) {
+    if (RegExp(r'[.!?:—–]$').hasMatch(words[i - 1]) || words[i - 1] == '—') continue;
+    final w = words[i].replaceAll(RegExp(r'[^A-Za-zÄÖÜäöüß-]'), '');
+    if (w.length >= 3 && RegExp('^[A-ZÄÖÜ]').hasMatch(w) && !_notNouns.contains(w)) keys.add('n:$w');
+  }
+  return keys;
 }
+
+/// Kept for the test: the verb + preposition, or else the sentence.
+String focusOf(Task t) => focusKeys(t).firstWhere((k) => k.startsWith('vp:'), orElse: () => focusKeys(t).first);
