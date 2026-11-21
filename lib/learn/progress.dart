@@ -271,10 +271,20 @@ class Progress extends ChangeNotifier {
       }
     }
 
+    // No other words left: fill the round up to its full size with similar ones rather than
+    // starting a shorter round.
+    List<Word> done(Iterable<Word> rest) {
+      for (final w in rest) {
+        if (out.length >= n) break;
+        if (!out.contains(w)) out.add(w);
+      }
+      return shuffled(out);
+    }
+
     if (mode == 'rev') {
       final seen = p.where((w) => prog[w.k] != null).toList()..sort((x, y) => rank(x).compareTo(rank(y)));
       take(seen, n);
-      return shuffled(out);
+      return done(seen);
     }
     if (mode == 'new') {
       final fresh = byBook(p.where((w) => prog[w.k] == null));
@@ -282,7 +292,7 @@ class Progress extends ChangeNotifier {
       take(fresh, n);
       take(learning, n);
       take(p, n);
-      return shuffled(out);
+      return done([...fresh, ...learning, ...p]);
     }
     final due = p.where((w) => rank(w) == 0).toList();
     final nw = byBook(p.where((w) => rank(w) == 1));
@@ -292,7 +302,7 @@ class Progress extends ChangeNotifier {
     take(nw, n);
     take(due, n);
     take(rest, n);
-    return shuffled(out);
+    return done([...due, ...nw, ...rest]);
   }
 
   /// After a round: words answered without a miss go up a box, missed ones go down.
