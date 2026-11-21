@@ -261,29 +261,38 @@ class Progress extends ChangeNotifier {
         return e != 0 ? e : x.o.compareTo(y.o);
       });
     p.sort((x, y) => rank(x).compareTo(rank(y)));
+
+    // Fill up in order of priority, but never two easily confused words in one round.
+    final out = <Word>[];
+    void take(Iterable<Word> ws, int upTo) {
+      for (final w in ws) {
+        if (out.length >= upTo) return;
+        if (!out.any((o) => similarWords(o, w))) out.add(w);
+      }
+    }
+
     if (mode == 'rev') {
       final seen = p.where((w) => prog[w.k] != null).toList()..sort((x, y) => rank(x).compareTo(rank(y)));
-      return shuffled(seen.take(n));
+      take(seen, n);
+      return shuffled(out);
     }
     if (mode == 'new') {
       final fresh = byBook(p.where((w) => prog[w.k] == null));
       final learning = p.where((w) => prog[w.k] != null && prog[w.k]!.b < 2).toList()..sort((x, y) => prog[x.k]!.b.compareTo(prog[y.k]!.b));
-      var o = fresh.take(n).toList();
-      if (o.length < n) o.addAll(learning.take(n - o.length));
-      if (o.length < n) o.addAll(p.where((w) => !o.contains(w)).take(n - o.length));
-      return shuffled(o);
+      take(fresh, n);
+      take(learning, n);
+      take(p, n);
+      return shuffled(out);
     }
     final due = p.where((w) => rank(w) == 0).toList();
     final nw = byBook(p.where((w) => rank(w) == 1));
     final rest = p.where((w) => rank(w) > 1).toList();
     final minNew = min(nw.length, (n / 3).ceil());
-    final out = due.take(n - minNew).toList();
-    out.addAll(nw.take(n - out.length));
-    for (final w in due) {
-      if (out.length < n && !out.contains(w)) out.add(w);
-    }
-    if (out.length < n) out.addAll(rest.take(n - out.length));
-    return shuffled(out.take(n));
+    take(due, n - minNew);
+    take(nw, n);
+    take(due, n);
+    take(rest, n);
+    return shuffled(out);
   }
 
   /// After a round: words answered without a miss go up a box, missed ones go down.

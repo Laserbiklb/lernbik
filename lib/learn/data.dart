@@ -174,3 +174,26 @@ bool looksEnglish(String de, String? en) {
   }
   return false;
 }
+
+String _stem(Word w) => _fold(w.d.split(' / ').first);
+String _tr(String s) => s.toLowerCase().replaceAll(RegExp(r'\(.*?\)'), '').replaceAll(RegExp('[^a-zа-яё ]'), '').trim();
+
+/// Words that are easy to mix up and shouldn't meet in one round: the same translation, one inside
+/// the other (Lehrer / Lehrerin, Haus / Hausaufgabe), a long common start (Kindergarten / Kinderzimmer)
+/// or only a letter or two apart (Tasche / Tasse).
+bool similarWords(Word a, Word b) {
+  if (a.k == b.k) return true;
+  final ra = _tr(a.ru), rb = _tr(b.ru);
+  if (ra.isNotEmpty && ra == rb) return true;
+  if (a.en != null && b.en != null && _tr(a.en!) == _tr(b.en!)) return true;
+  final x = _stem(a), y = _stem(b);
+  if (x.length < 3 || y.length < 3) return false;
+  final short = x.length <= y.length ? x : y, long = x.length <= y.length ? y : x;
+  if (short.length >= 4 && long.contains(short)) return true;
+  var p = 0;
+  while (p < short.length && x[p] == y[p]) {
+    p++;
+  }
+  if (p >= 6) return true;
+  return (long.length - short.length) <= 2 && _lev(x, y) <= (short.length <= 4 ? 1 : 2);
+}
