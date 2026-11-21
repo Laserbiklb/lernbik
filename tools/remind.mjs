@@ -11,13 +11,16 @@ const msg = getMessaging();
 const T = {
   de: { hw: (n) => n === 1 ? '1 Hausaufgabe ist noch offen' : `${n} Hausaufgaben sind noch offen`,
         rev: (n) => `📚 ${n} Wörter warten aufs Wiederholen`,
-        streak: (s) => `🔥 Serie: ${s} Tage – lerne heute ein paar Wörter!`, title: 'Lernbik' },
+        streak: (s) => `🔥 Serie: ${s} Tage – lerne heute ein paar Wörter!`,
+        learn: '🌱 Heute noch nichts gelernt – lerne ein paar neue Wörter!', title: 'Lernbik' },
   ru: { hw: (n) => `Несделанных заданий: ${n}`,
         rev: (n) => `📚 Пора повторить слов: ${n}`,
-        streak: (s) => `🔥 Серия ${s} дн. — не прерывай, повтори пару слов!`, title: 'Lernbik' },
+        streak: (s) => `🔥 Серия ${s} дн. — не прерывай, повтори пару слов!`,
+        learn: '🌱 Сегодня ты ещё не учил — выучи пару новых слов!', title: 'Lernbik' },
   en: { hw: (n) => n === 1 ? '1 homework task is still open' : `${n} homework tasks are still open`,
         rev: (n) => `📚 ${n} words are due for review`,
-        streak: (s) => `🔥 Streak: ${s} days – learn a few words today!`, title: 'Lernbik' },
+        streak: (s) => `🔥 Streak: ${s} days – learn a few words today!`,
+        learn: '🌱 Nothing learned yet today – learn a few new words!', title: 'Lernbik' },
 };
 const pad = (n) => String(n).padStart(2, '0');
 const ymd = (d) => `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`;
@@ -78,10 +81,16 @@ for (const u of users.docs) {
   const atRisk = streak > 0 && !learnedToday;
   const due = await dueWords(u.id);
   const review = due >= MIN_DUE ? due : 0;
-  if (!open && !review && !(atRisk && lastSlot)) continue;
+  // Nothing open and nothing to review, but nothing learned today either: suggest a few new words.
+  const nudge = !open && !review && !learnedToday;
+  if (!open && !review && !nudge) continue;
 
   const t = T[d.lang] || T.de;
-  const body = [open ? t.hw(open) : null, review ? t.rev(review) : null, atRisk ? t.streak(streak) : null].filter(Boolean).join('\n');
+  const body = [
+    open ? t.hw(open) : null,
+    review ? t.rev(review) : null,
+    atRisk && (lastSlot || nudge) ? t.streak(streak) : nudge ? t.learn : null,
+  ].filter(Boolean).join('\n');
   const r = await msg.sendEachForMulticast({
     tokens,
     notification: { title: t.title, body },
