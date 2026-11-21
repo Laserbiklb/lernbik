@@ -50,20 +50,33 @@ List<Task> tasksForRule(Rule r, String lang, {int n = 6, Map<String, int>? got})
   for (final t in qz.take(fromQz)) {
     addT(t);
   }
-  // What hasn't been mastered yet first (missed ones, then new ones); one place stays for the rest.
+  // A rule with parts: one task per part, the weakest parts first (missed, never seen, right once,
+  // then mastered ones in random order). So mastered parts only come when nothing else is left, and a
+  // generator that only covers two parts (freuen auf / über) doesn't take half the run.
   final els = elementsOf(r.id);
-  if (got != null && els.isNotEmpty) {
-    final open = els.keys.where((e) => (got[e] ?? 0) < 2).toSet();
-    final room = open.length < els.length ? n - 1 : n;
-    for (final wantMissed in [true, false]) {
-      final want = wantMissed ? open.where((e) => (got[e] ?? 0) < 0).toSet() : open;
-      var t2 = 0;
-      while (out.length < room && want.isNotEmpty && t2 < n * 40) {
-        t2++;
-        try {
-          final t = gens[_rnd.nextInt(gens.length)](_rnd, lang);
-          if (want.contains(elementOf(t))) addT(t);
-        } catch (_) {}
+  if (els.isNotEmpty) {
+    final g = got ?? const <String, int>{};
+    final pool = <String, List<Task>>{};
+    for (var i = 0; i < n * 40; i++) {
+      try {
+        final t = gens[_rnd.nextInt(gens.length)](_rnd, lang);
+        final e = elementOf(t);
+        if (els.containsKey(e)) (pool[e] ??= []).add(t);
+      } catch (_) {}
+    }
+    int rank(String e) {
+      final v = g[e] ?? 0;
+      return v < 0 ? 0 : v + 1;
+    }
+
+    final order = pool.keys.toList()
+      ..shuffle(_rnd)
+      ..sort((a, b) => rank(a).compareTo(rank(b)));
+    for (final e in order) {
+      for (final t in pool[e]!) {
+        final before = out.length;
+        addT(t);
+        if (out.length > before) break;
       }
     }
   }
