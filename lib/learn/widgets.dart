@@ -105,12 +105,15 @@ class TokenLine extends StatelessWidget {
   final void Function(int)? onTap;
   final bool placeholder;
   final List<OptState>? states;
-  const TokenLine({super.key, required this.tokens, this.onTap, this.placeholder = false, this.states});
+
+  /// Single letters: big square tiles that are easy to hit.
+  final bool letters;
+  const TokenLine({super.key, required this.tokens, this.onTap, this.placeholder = false, this.states, this.letters = false});
   @override
   Widget build(BuildContext context) {
     final w = Wrap(
-      spacing: 8,
-      runSpacing: 8,
+      spacing: letters ? 7 : 8,
+      runSpacing: letters ? 7 : 8,
       children: [
         for (var i = 0; i < tokens.length; i++)
           Material(
@@ -122,17 +125,23 @@ class TokenLine extends StatelessWidget {
             child: InkWell(
               borderRadius: BorderRadius.circular(10),
               onTap: onTap == null ? null : () => onTap!(i),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 10),
-                child: Text(tokens[i] == ' ' ? '␣' : tokens[i], style: L.b(17)),
-              ),
+              child: letters
+                  ? SizedBox(
+                      width: 52,
+                      height: 56,
+                      child: Center(child: Text(tokens[i] == ' ' ? '␣' : tokens[i], style: L.b(26))),
+                    )
+                  : Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 10),
+                      child: Text(tokens[i] == ' ' ? '␣' : tokens[i], style: L.b(17)),
+                    ),
             ),
           ),
       ],
     );
     if (!placeholder) return w;
     return Container(
-      constraints: const BoxConstraints(minHeight: 58),
+      constraints: BoxConstraints(minHeight: letters ? 74 : 58),
       padding: const EdgeInsets.all(8),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(14),

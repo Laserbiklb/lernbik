@@ -624,12 +624,18 @@ class _RoundScreenState extends State<RoundScreen> {
         ),
       );
       kids.add(
-        TokenLine(tokens: [for (final i in lPick) lChars[i]], placeholder: true, onTap: locked ? null : (j) => setState(() => lPool.add(lPick.removeAt(j)))),
+        TokenLine(
+          tokens: [for (final i in lPick) lChars[i]],
+          placeholder: true,
+          letters: true,
+          onTap: locked ? null : (j) => setState(() => lPool.add(lPick.removeAt(j))),
+        ),
       );
       kids.add(const SizedBox(height: 12));
       kids.add(
         TokenLine(
           tokens: [for (final i in lPool) lChars[i]],
+          letters: true,
           onTap: locked
               ? null
               : (j) {
