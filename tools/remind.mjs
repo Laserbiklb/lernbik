@@ -1,5 +1,6 @@
-// Sends homework and word-review reminders. Runs every 30 minutes from GitHub Actions.
-// Needs FIREBASE_SA (service account JSON) in the environment.
+// Sends homework and word-review reminders. Needs FIREBASE_SA (service account JSON).
+// GitHub starts scheduled runs only a few times a day, so the workflow keeps this script running
+// for hours (LOOP_MIN) and it checks every TICK_MIN minutes; then the workflow starts itself again.
 import { initializeApp, cert } from 'firebase-admin/app';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { getMessaging } from 'firebase-admin/messaging';
@@ -25,8 +26,8 @@ const T = {
 const pad = (n) => String(n).padStart(2, '0');
 const ymd = (d) => `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`;
 
-const now = Date.now();
-const groups = new Map();
+let now = Date.now();
+let groups = new Map();
 async function groupInfo(gid) {
   if (!groups.has(gid)) {
     const hw = await db.collection('groups').doc(gid).collection('hw').where('deleted', '==', false).get();
@@ -48,63 +49,82 @@ async function dueWords(key) {
 }
 
 const WINDOW = 180;
-const users = await db.collection('users').where('remindOn', '==', true).get();
-let sent = 0;
-for (const u of users.docs) {
-  const d = u.data();
-  const tokens = Array.isArray(d.tokens) ? d.tokens : [];
-  if (!tokens.length || !d.gid) continue;
-  const local = new Date(now + (Number(d.tz) || 60) * 60000);
-  const times = Array.isArray(d.remind) ? d.remind : ['10:00', '22:00'];
-  const today = ymd(local);
-  // GitHub starts scheduled runs late or skips some, so a reminder goes out at the first run after
-  // its time (up to WINDOW minutes late), once a day.
-  const mins = local.getUTCHours() * 60 + local.getUTCMinutes();
-  const toMin = (t) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5));
-  const dueSlots = times.filter((t) => mins >= toMin(t) && mins - toMin(t) <= WINDOW && !(d.sent && d.sent[t] === today)).sort();
-  if (!dueSlots.length) continue;
-  const slot = dueSlots.at(-1);
+const LOOP_MIN = Number(process.env.LOOP_MIN) || 0;
+const TICK_MIN = Number(process.env.TICK_MIN) || 3;
 
-  const hw = await groupInfo(d.gid);
-  const done = d.done || {};
-  const open = hw.filter((h) => !done[h.id] && (!h.due || h.due >= today)).length;
+async function tick(verbose) {
+  now = Date.now();
+  groups = new Map();
+  const users = await db.collection('users').where('remindOn', '==', true).get();
+  let sent = 0;
+  for (const u of users.docs) {
+    const d = u.data();
+    const tokens = Array.isArray(d.tokens) ? d.tokens : [];
+    if (!tokens.length || !d.gid) continue;
+    const local = new Date(now + (Number(d.tz) || 60) * 60000);
+    const times = Array.isArray(d.remind) ? d.remind : ['10:00', '22:00'];
+    const today = ymd(local);
+    // GitHub starts scheduled runs late or skips some, so a reminder goes out at the first run after
+    // its time (up to WINDOW minutes late), once a day.
+    const mins = local.getUTCHours() * 60 + local.getUTCMinutes();
+    const toMin = (t) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5));
+    const dueSlots = times.filter((t) => mins >= toMin(t) && mins - toMin(t) <= WINDOW && !(d.sent && d.sent[t] === today)).sort();
+    if (!dueSlots.length) continue;
+    const slot = dueSlots.at(-1);
 
-  let streak = 0, learnedToday = true;
-  if (d.mid) {
-    const m = await db.collection('groups').doc(d.gid).collection('members').doc(d.mid).get();
-    streak = m.get('streak') || 0;
-    const y = new Date(local.getTime() - 86400000);
-    learnedToday = m.get('day') === today;
-    if (m.get('day') !== today && m.get('day') !== ymd(y)) streak = 0;
+    const hw = await groupInfo(d.gid);
+    const done = d.done || {};
+    const open = hw.filter((h) => !done[h.id] && (!h.due || h.due >= today)).length;
+
+    let streak = 0, learnedToday = true;
+    if (d.mid) {
+      const m = await db.collection('groups').doc(d.gid).collection('members').doc(d.mid).get();
+      streak = m.get('streak') || 0;
+      const y = new Date(local.getTime() - 86400000);
+      learnedToday = m.get('day') === today;
+      if (m.get('day') !== today && m.get('day') !== ymd(y)) streak = 0;
+    }
+    const lastSlot = [...times].sort().at(-1) === slot;
+    const atRisk = streak > 0 && !learnedToday;
+    const due = await dueWords(u.id);
+    const review = due >= MIN_DUE ? due : 0;
+    // Nothing open and nothing to review, but nothing learned today either: suggest a few new words.
+    const nudge = !open && !review && !learnedToday;
+    if (!open && !review && !nudge) continue;
+
+    const t = T[d.lang] || T.de;
+    const body = [
+      open ? t.hw(open) : null,
+      review ? t.rev(review) : null,
+      atRisk && (lastSlot || nudge) ? t.streak(streak) : nudge ? t.learn : null,
+    ].filter(Boolean).join('\n');
+    const r = await msg.sendEachForMulticast({
+      tokens,
+      notification: { title: t.title, body },
+      android: { priority: 'high' },
+      webpush: { fcmOptions: { link: 'https://lernbik.web.app/' } },
+    });
+    const bad = tokens.filter((_, i) => {
+      const e = r.responses[i].error;
+      return e && /registration-token-not-registered|invalid-argument|invalid-registration-token/.test(e.code);
+    });
+    const upd = Object.fromEntries(dueSlots.map((t) => [`sent.${t}`, today]));
+    if (bad.length) upd.tokens = FieldValue.arrayRemove(...bad);
+    await u.ref.update(upd);
+    sent += r.successCount;
   }
-  const lastSlot = [...times].sort().at(-1) === slot;
-  const atRisk = streak > 0 && !learnedToday;
-  const due = await dueWords(u.id);
-  const review = due >= MIN_DUE ? due : 0;
-  // Nothing open and nothing to review, but nothing learned today either: suggest a few new words.
-  const nudge = !open && !review && !learnedToday;
-  if (!open && !review && !nudge) continue;
-
-  const t = T[d.lang] || T.de;
-  const body = [
-    open ? t.hw(open) : null,
-    review ? t.rev(review) : null,
-    atRisk && (lastSlot || nudge) ? t.streak(streak) : nudge ? t.learn : null,
-  ].filter(Boolean).join('\n');
-  const r = await msg.sendEachForMulticast({
-    tokens,
-    notification: { title: t.title, body },
-    android: { priority: 'high' },
-    webpush: { fcmOptions: { link: 'https://lernbik.web.app/' } },
-  });
-  const bad = tokens.filter((_, i) => {
-    const e = r.responses[i].error;
-    return e && /registration-token-not-registered|invalid-argument|invalid-registration-token/.test(e.code);
-  });
-  const upd = Object.fromEntries(dueSlots.map((t) => [`sent.${t}`, today]));
-  if (bad.length) upd.tokens = FieldValue.arrayRemove(...bad);
-  await u.ref.update(upd);
-  sent += r.successCount;
+  const withTokens = users.docs.filter((u) => (u.get('tokens') || []).length).length;
+  if (sent || verbose) console.log(`${new Date(now).toISOString().slice(0, 16)} users with reminders: ${users.size}, of them with a device for push: ${withTokens}, notifications sent: ${sent}`);
 }
-const withTokens = users.docs.filter((u) => (u.get('tokens') || []).length).length;
-console.log(`users with reminders: ${users.size}, of them with a device for push: ${withTokens}, notifications sent: ${sent}`);
+
+const start = Date.now();
+await tick(true);
+while (Date.now() - start < LOOP_MIN * 60000) {
+  await new Promise((r) => setTimeout(r, TICK_MIN * 60000));
+  try {
+    await tick(false);
+  } catch (e) {
+    console.log('tick failed:', e.message);
+  }
+}
+console.log('done');

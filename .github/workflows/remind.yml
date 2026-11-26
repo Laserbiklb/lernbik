@@ -1,17 +1,26 @@
-# Reminders (homework, words to review): every 30 minutes, sends a push to everyone whose reminder
-# time has come. GitHub starts scheduled runs late or skips some (fewer at odd minutes), so the
-# script also sends reminders that are up to 3 hours late.
+# Reminders (homework, words to review, a nudge to learn). GitHub starts scheduled runs only a few
+# times a day, so one run stays on for almost 6 hours and checks every 3 minutes, then starts the
+# next run itself. The schedule is only a backup in case the chain breaks. Free for a public repo.
 name: Reminders
 
 on:
   schedule:
-    - cron: "7,37 * * * *"
+    - cron: "7 */2 * * *"
   workflow_dispatch:
+
+# Only one run at a time; a started run waits until the current one ends.
+concurrency:
+  group: remind
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  actions: write
 
 jobs:
   remind:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 355
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -21,3 +30,10 @@ jobs:
       - run: node tools/remind.mjs
         env:
           FIREBASE_SA: ${{ secrets.FIREBASE_SA }}
+          LOOP_MIN: "340"
+          TICK_MIN: "3"
+      - name: Start the next run
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run remind.yml --ref main -R ${{ github.repository }}

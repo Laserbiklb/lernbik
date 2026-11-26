@@ -368,9 +368,9 @@ class RuleScreen extends StatelessWidget {
                   const SizedBox(height: 8),
                   Text(
                     l(
-                      'Jede Runde ohne Fehler hebt die Regel eine Stufe: lerne → kann → sicher. Gelernt ist sie erst, wenn alle farbigen Wörter in der Regel oben zweimal richtig waren (grün). Was noch fehlt, kommt in den Runden zuerst. Danach kommt die Regel zur Wiederholung zurück – je höher die Stufe, desto später.',
-                      'Каждый заход без ошибок поднимает правило на уровень: учу → знаю → закреплено. Выученным оно станет, только когда все цветные слова в правиле выше будут отвечены правильно дважды (зелёные). Чего не хватает, попадается в заходах первым. Потом правило возвращается на повторение — чем выше уровень, тем позже.',
-                      'Every run without mistakes moves the rule up a level: learning → know → solid. It counts as learned only when all coloured words in the rule above were answered right twice (green). What is missing comes first in the runs. Then the rule comes back for review – the higher the level, the later.',
+                      'Jedes farbige Wort in der Regel oben wird grün, wenn es zweimal richtig war. Sind alle grün, kannst du die Regel („kann“). Fehlendes kommt in den Runden zuerst. „Sicher“ wird sie nur durch fehlerfreie Wiederholungen, wenn sie wieder dran ist – je höher die Stufe, desto später. Ein Fehler macht ein grünes Wort rot; ein richtiger Treffer macht es wieder grün.',
+                      'Каждое цветное слово в правиле выше становится зелёным после двух правильных ответов. Все зелёные — правило «знаю». Чего не хватает, попадается первым. «Закреплено» — только через повторения без ошибок, когда правило подойдёт по сроку; чем выше уровень, тем позже. Ошибка делает зелёное слово красным, один правильный ответ возвращает зелёный.',
+                      'Each coloured word in the rule above turns green after two right answers. All green = the rule is "known". What is missing comes first. "Solid" only comes through mistake-free reviews when the rule is due again – the higher the level, the later. A mistake turns a green word red; one right answer makes it green again.',
                     ),
                     style: L.t(12, c: L.muted),
                   ),
@@ -435,6 +435,7 @@ class RuleScreen extends StatelessWidget {
 
 void practiseRule(BuildContext context, AppState s, Rule r) {
   final l = (String de, String ru, String en) => _l(s, de, ru, en);
+  var before = s.learn.ruleBox(r.id);
   Navigator.push(
     context,
     MaterialPageRoute(
@@ -442,7 +443,10 @@ void practiseRule(BuildContext context, AppState s, Rule r) {
         title: r.t(s.lang),
         lang: s.lang,
         p: s.learn,
-        make: () => tasksForRule(r, s.lang, got: s.learn.rel[r.id]),
+        make: () {
+          before = s.learn.ruleBox(r.id);
+          return tasksForRule(r, s.lang, got: s.learn.rel[r.id]);
+        },
         onTasks: (all, missed) => s.learn.recordElements(r.id, [for (final t in all) (elementOf(t), !missed.contains(t))]),
         onDone: (clean, right, first, total) => s.learn.applyRuleRun(r.id, clean, right),
         doneExtra: (ctx, clean, first, total) => Panel(
@@ -455,10 +459,15 @@ void practiseRule(BuildContext context, AppState s, Rule r) {
               RuleElements(s: s, r: r),
               const SizedBox(height: 8),
               Text(
-                clean
+                !clean
+                    ? l('Mit Fehler – die Regel kommt bald wieder.', 'С ошибкой — правило скоро вернётся.', 'With a mistake – the rule comes back soon.')
+                    : s.learn.ruleBox(r.id) > before
                     ? l('Ohne Fehler – eine Stufe höher.', 'Без ошибок — уровень выше.', 'No mistakes – one level up.')
-                    : l('Mit Fehler – die Stufe bleibt, die Regel kommt bald wieder.', 'С ошибкой — уровень тот же, правило скоро вернётся.',
-                        'With a mistake – the level stays, the rule comes back soon.'),
+                    : !s.learn.ruleCovered(r.id)
+                    ? l('Ohne Fehler. „Kann ich“ kommt, wenn alle Teile der Regel grün sind.', 'Без ошибок. «Знаю» будет, когда все части правила станут зелёными.',
+                        'No mistakes. "Known" comes when every part of the rule is green.')
+                    : l('Ohne Fehler. Die nächste Stufe gibt es bei der Wiederholung, wenn die Regel wieder dran ist.', 'Без ошибок. Следующий уровень — на повторении, когда правило снова подойдёт по сроку.',
+                        'No mistakes. The next level comes at the review, when the rule is due again.'),
                 style: L.t(12, c: clean ? L.das : L.muted),
               ),
             ],
@@ -533,7 +542,7 @@ class DictScreen extends StatefulWidget {
 
 class _DictScreenState extends State<DictScreen> {
   String q = '';
-  String filter = 'all'; // all | A1 | A2 | course | own
+  String filter = 'all'; // all | A1 | A2 | course | fav | own
   AppState get s => widget.s;
 
   @override
@@ -543,12 +552,15 @@ class _DictScreenState extends State<DictScreen> {
       listenable: s.learn,
       builder: (context, _) {
         final p = s.learn;
-        final courseId = '${s.courseLv} · ${s.courseN}';
+        // The chapter open in Lernen (picked by the learner), else the course chapter.
+        final chLv = nav.lv ?? s.courseLv, chN = nav.n ?? s.courseN;
+        final courseId = '$chLv · $chN';
         Iterable<Word> ws = p.allWords;
         ws = switch (filter) {
           'A1' => ws.where((w) => w.level == 'A1'),
           'A2' => ws.where((w) => w.level == 'A2'),
           'course' => ws.where((w) => w.c == courseId),
+          'fav' => ws.where((w) => p.fav.contains(w.k)),
           'own' => ws.where((w) => w.own),
           _ => ws,
         };
@@ -556,7 +568,8 @@ class _DictScreenState extends State<DictScreen> {
         final ql = q.trim().toLowerCase();
         // German, Russian and English always match, whatever the app language.
         if (qq.isNotEmpty) ws = ws.where((w) => fold(w.k).contains(qq) || w.ru.toLowerCase().contains(ql) || (w.en ?? '').toLowerCase().contains(ql));
-        final list = ws.take(200).toList();
+        final tab = ws.toList();
+        final list = tab.take(200).toList();
         final ownChapters = {for (final w in p.own) w.c}.toList();
         Widget chip(String v, String label, [Color c = L.der]) =>
             Pill(label, color: filter == v ? c : L.muted, filled: filter == v, onTap: () => setState(() => filter = v));
@@ -579,10 +592,22 @@ class _DictScreenState extends State<DictScreen> {
                 chip('all', l('Alle', 'Все', 'All')),
                 chip('A1', 'A1'),
                 chip('A2', 'A2'),
-                chip('course', '${l('Kapitel', 'Глава', 'Chapter')} ${s.courseN}'),
+                chip('course', '${l('Kapitel', 'Глава', 'Chapter')} ${chLv == s.courseLv ? '' : '$chLv '}$chN'),
+                chip('fav', '★ ${p.fav.length}', L.das),
                 chip('own', l('Eigene', 'Свои', 'Own'), L.sign),
               ],
             ),
+            if (filter != 'all' && tab.isNotEmpty)
+              GlowButton(
+                '${l('Diese Wörter lernen', 'Учить эти слова', 'Learn these words')} · ${tab.length}',
+                size: 16,
+                onTap: () => startWords(context, s, tab, 'mix'),
+              ),
+            if (filter == 'fav' && tab.isEmpty)
+              Text(
+                l('Tippe ☆ bei einem Wort, um es hier zu sammeln.', 'Нажмите ☆ у слова, чтобы добавить его сюда.', 'Tap ☆ next to a word to collect it here.'),
+                style: L.t(13, c: L.muted),
+              ),
             if (filter == 'own' && ownChapters.isNotEmpty)
               Panel(
                 child: Rows([
@@ -643,6 +668,11 @@ class _DictScreenState extends State<DictScreen> {
                           ),
                         ),
                         if (p.prog[w.k] != null) LevelDots(p.prog[w.k]!.b),
+                        IconButton(
+                          tooltip: l('Favorit', 'Избранное', 'Favourite'),
+                          onPressed: () => p.toggleFav(w.k),
+                          icon: Icon(p.fav.contains(w.k) ? Icons.star : Icons.star_border, color: p.fav.contains(w.k) ? L.das : L.muted, size: 20),
+                        ),
                         if (Tts.available)
                           IconButton(
                             tooltip: l('Anhören', 'Послушать', 'Listen'),
@@ -664,9 +694,9 @@ class _DictScreenState extends State<DictScreen> {
                   ),
               ]),
             ),
-            if (ws.length > list.length)
+            if (tab.length > list.length)
               Text(
-                '… ${ws.length - list.length} ${l('weitere – suche genauer', 'ещё – уточните поиск', 'more – refine the search')}',
+                '… ${tab.length - list.length} ${l('weitere – suche genauer', 'ещё – уточните поиск', 'more – refine the search')}',
                 style: L.t(12, c: L.muted),
               ),
             Row(

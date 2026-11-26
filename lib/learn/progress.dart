@@ -45,6 +45,9 @@ class Progress extends ChangeNotifier {
   int xp = 0, streak = 0, dn = 0, ts = 0;
   String day = '';
   List<Word> own = [];
+
+  /// Words starred in the dictionary (by key).
+  Set<String> fav = {};
   Map<String, int> rclean = {}; // rule id → level 0 … 5 (old data: clean runs, capped at 5)
   Map<String, int> rdue = {}; // rule id → when to repeat (ms); set once a rule was practised
 
@@ -93,6 +96,8 @@ class Progress extends ChangeNotifier {
     'rsize': rsize,
     'voice': voice,
     'anim': anim,
+    'rv': 3,
+    'fav': fav.toList(),
   };
 
   void _fromJson(Map<String, dynamic> o) {
@@ -116,6 +121,12 @@ class Progress extends ChangeNotifier {
     };
     rclean = ints('rclean');
     rdue = ints('rdue');
+    // Before v3 clean runs piled up without spacing: those levels start again from "known".
+    if (o['rv'] != 3) {
+      for (final k in rclean.keys.toList()) {
+        if (rclean[k]! > ruleLearnedBox) rclean[k] = ruleLearnedBox;
+      }
+    }
     rel = {
       for (final e in (o['rel'] as Map? ?? {}).entries)
         if (e.value is Map)
@@ -132,6 +143,7 @@ class Progress extends ChangeNotifier {
     rsize = [6, 12, 20].contains(o['rsize']) ? o['rsize'] as int : 12;
     voice = o['voice'] != false;
     anim = o['anim'] != false;
+    fav = {for (final k in (o['fav'] as List? ?? [])) '$k'};
   }
 
   /// The member document of the current group (stats for the ranking); null when in no group.
@@ -231,17 +243,19 @@ class Progress extends ChangeNotifier {
     return m >= n;
   }
 
-  /// Records the answers of a run: a right answer counts once per run and element, a wrong one
-  /// marks the element as missed (it has to be answered right twice again).
+  /// Records the answers of a run: a right answer counts once per run and element. A wrong one
+  /// turns the element red: a never-green element then needs two right answers again, a green one
+  /// that slipped (-2) is green again after one.
   void recordElements(String ruleId, Iterable<(String, bool)> answers) {
     final got = rel[ruleId] ??= {};
     final wrong = {for (final (e, ok) in answers) if (!ok) e};
     final right = {for (final (e, ok) in answers) if (ok) e}..removeAll(wrong);
     for (final e in wrong) {
-      got[e] = -1;
+      final g = got[e] ?? 0;
+      got[e] = g >= 2 || g == -2 ? -2 : -1;
     }
     for (final e in right) {
-      got[e] = min(2, max(0, got[e] ?? 0) + 1);
+      got[e] = got[e] == -2 ? 2 : min(2, max(0, got[e] ?? 0) + 1);
     }
   }
   bool learned(String ruleId) => ruleBox(ruleId) >= ruleLearnedBox;
@@ -376,11 +390,29 @@ class Progress extends ChangeNotifier {
   /// One run of a rule's exercises, as words: a run without mistakes moves the rule up a level and
   /// it comes back later (iv); a run with a mistake keeps the level and the rule is due again at once.
   void _ruleRun(String ruleId, bool clean) {
-    final b0 = max(0, _rawBox(ruleId));
-    final b = clean ? min(5, b0 + 1) : b0;
-    rclean[ruleId] = b;
     final now = DateTime.now().millisecondsSinceEpoch;
-    rdue[ruleId] = clean ? now + iv[b].inMilliseconds : now;
+    final b0 = max(0, _rawBox(ruleId));
+    final hasEls = (ruleElements?.call(ruleId) ?? const <String>[]).isNotEmpty;
+    final wasDue = !rdue.containsKey(ruleId) || rdue[ruleId]! <= now;
+    int b;
+    if (b0 < ruleLearnedBox) {
+      // Before "known": with elements, clean runs don't pile up — "known" comes exactly when
+      // every element is green. Rules without elements still need clean runs.
+      if (hasEls) {
+        b = ruleCovered(ruleId) ? ruleLearnedBox : min(ruleLearnedBox - 1, clean ? b0 + 1 : b0);
+      } else {
+        b = clean ? b0 + 1 : b0;
+      }
+    } else {
+      // Above "known" only through clean reviews once the rule is due again (spaced).
+      b = clean && wasDue ? min(5, b0 + 1) : b0;
+    }
+    rclean[ruleId] = b;
+    if (!clean) {
+      rdue[ruleId] = now;
+    } else if (b != b0 || wasDue) {
+      rdue[ruleId] = now + iv[b].inMilliseconds;
+    }
   }
 
   void applyRuleRun(String ruleId, bool clean, int right) {
@@ -407,6 +439,11 @@ class Progress extends ChangeNotifier {
   void addXp(int n) {
     xp += n;
     touchDay();
+    save();
+  }
+
+  void toggleFav(String key) {
+    if (!fav.remove(key)) fav.add(key);
     save();
   }
 
