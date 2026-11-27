@@ -108,7 +108,10 @@ class TokenLine extends StatelessWidget {
 
   /// Single letters: big square tiles that are easy to hit.
   final bool letters;
-  const TokenLine({super.key, required this.tokens, this.onTap, this.placeholder = false, this.states, this.letters = false});
+
+  /// Word pieces (syllables): bigger tiles than normal tokens.
+  final bool chunks;
+  const TokenLine({super.key, required this.tokens, this.onTap, this.placeholder = false, this.states, this.letters = false, this.chunks = false});
   @override
   Widget build(BuildContext context) {
     final w = Wrap(
@@ -130,6 +133,14 @@ class TokenLine extends StatelessWidget {
                       width: 52,
                       height: 56,
                       child: Center(child: Text(tokens[i] == ' ' ? '␣' : tokens[i], style: L.b(26))),
+                    )
+                  : chunks
+                  ? ConstrainedBox(
+                      constraints: const BoxConstraints(minWidth: 60, minHeight: 56),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        child: Center(widthFactor: 1, child: Text(tokens[i], style: L.b(24))),
+                      ),
                     )
                   : Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 10),

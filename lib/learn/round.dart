@@ -8,6 +8,7 @@ import 'package:material_ui/material_ui.dart';
 import '../i18n.dart';
 import '../theme.dart';
 import 'data.dart';
+import 'pieces.dart';
 import 'progress.dart';
 import 'tts.dart';
 import 'widgets.dart';
@@ -20,6 +21,7 @@ const _games = {
   'paare': ('Paare', 'Пары', 'Pairs'),
   'tippen': ('Tippen', 'Набор', 'Typing'),
   'hoeren': ('Hören', 'На слух', 'Listening'),
+  'teile': ('Teile', 'Кусочки', 'Pieces'),
   'buchstaben': ('Buchstaben', 'Буквы', 'Letters'),
 };
 const _gameHint = {
@@ -29,6 +31,7 @@ const _gameHint = {
   'paare': ('Wort und Übersetzung verbinden', 'соединить слово и перевод', 'match word and translation'),
   'tippen': ('auf Deutsch schreiben', 'написать по-немецки', 'write it in German'),
   'hoeren': ('hören und Übersetzung wählen', 'услышать и выбрать перевод', 'listen and pick the translation'),
+  'teile': ('Wort aus Teilen bauen', 'собрать слово из кусочков', 'build the word from pieces'),
   'buchstaben': ('Wort aus Buchstaben bauen', 'собрать слово из букв', 'build the word from letters'),
 };
 
@@ -48,6 +51,13 @@ List<(String, String)> variants(Word w) {
 }
 
 String bareD(Word w) => variants(w).first.$2;
+/// The phrase to build from pieces (article as its own piece) and its pieces.
+(String, List<String>) _teileTarget(Word w) {
+  final v0 = variants(w).first;
+  final ps = [if (v0.$1.isNotEmpty) '${v0.$1} ', ...pieces(v0.$2)];
+  return (ps.join(), ps);
+}
+
 String say(Word w) => (w.a.isNotEmpty ? '${w.a} ' : '') + w.d;
 
 class RoundScreen extends StatefulWidget {
@@ -130,7 +140,9 @@ class _RoundScreenState extends State<RoundScreen> {
     };
     // In German there is no built-in translation: the translation games are skipped and the
     // letter/typing games are prompted by ear.
-    stages = noTr ? ['artikel', 'buchstaben', 'tippen'] : ['wahl', 'paare', 'artikel', voice && rnd.nextBool() ? 'hoeren' : 'rueck', 'buchstaben', 'tippen'];
+    stages = noTr
+        ? ['artikel', 'teile', 'buchstaben', 'tippen']
+        : ['wahl', 'paare', 'artikel', voice && rnd.nextBool() ? 'hoeren' : 'rueck', 'teile', 'buchstaben', 'tippen'];
     si = -1;
     missed.clear();
     seen.clear();
@@ -186,12 +198,12 @@ class _RoundScreenState extends State<RoundScreen> {
 
   bool _elig(String g, Word w) {
     final lv = _level(w);
-    if (noTr && g == 'buchstaben') return lv != 'known';
+    if (noTr && (g == 'buchstaben' || g == 'teile')) return lv != 'known';
     return switch (g) {
       'wahl' || 'paare' => lv != 'known',
       'artikel' => true,
       'rueck' || 'hoeren' => lv != 'new',
-      'buchstaben' => lv == 'learn',
+      'buchstaben' || 'teile' => lv == 'learn',
       'tippen' => lv == 'known',
       _ => true,
     };
@@ -209,6 +221,7 @@ class _RoundScreenState extends State<RoundScreen> {
     var items = shuffled(batch).where((w) => _elig(g, w)).toList();
     if (g == 'artikel') items = items.where((w) => w.a.isNotEmpty).toList();
     if (g == 'buchstaben') items = items.where((w) => bareD(w).length > 1 && bareD(w).length <= 18).toList();
+    if (g == 'teile') items = items.where((w) => _teileTarget(w).$2.length >= 2).toList();
     if (g == 'paare') {
       if (items.length < 2) return _nextStage();
       seen.addAll(items.map((w) => w.k));
@@ -275,6 +288,17 @@ class _RoundScreenState extends State<RoundScreen> {
       if (g == 'wahl' && voice) Tts.say(say(w));
     } else if (g == 'artikel') {
       if (voice) Tts.say(w.d);
+    } else if (g == 'teile') {
+      if (_cue(w) == null) Tts.say(say(w));
+      final (target, ps) = _teileTarget(w);
+      lChars = ps;
+      lPool = List.generate(ps.length, (i) => i);
+      var n = 0;
+      do {
+        lPool.shuffle(rnd);
+        n++;
+      } while (n < 8 && lPool.map((i) => ps[i]).join() == target);
+      lPick = [];
     } else if (g == 'buchstaben') {
       if (_cue(w) == null) Tts.say(say(w));
       final bd = bareD(w);
@@ -614,6 +638,30 @@ class _RoundScreenState extends State<RoundScreen> {
           ),
         );
       }
+    } else if (g == 'teile') {
+      final target = _teileTarget(w).$1;
+      kids.add(_ask(w, l('Wort aus Teilen bauen', 'соберите слово из кусочков', 'build the word from pieces')));
+      kids.add(
+        TokenLine(
+          tokens: [for (final i in lPick) lChars[i].trim()],
+          placeholder: true,
+          chunks: true,
+          onTap: locked ? null : (j) => setState(() => lPool.add(lPick.removeAt(j))),
+        ),
+      );
+      kids.add(const SizedBox(height: 12));
+      kids.add(
+        TokenLine(
+          tokens: [for (final i in lPool) lChars[i].trim()],
+          chunks: true,
+          onTap: locked
+              ? null
+              : (j) {
+                  setState(() => lPick.add(lPool.removeAt(j)));
+                  if (lPool.isEmpty) _answer(lPick.map((i) => lChars[i]).join() == target);
+                },
+        ),
+      );
     } else if (g == 'buchstaben') {
       final v0 = variants(w).first;
       kids.add(
